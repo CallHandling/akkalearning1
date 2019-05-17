@@ -51,4 +51,3 @@ lazy val `media-manager-app` = project
       "org.scalatest" %% "scalatest" % v.scalatest % Test
     )
   )
-
