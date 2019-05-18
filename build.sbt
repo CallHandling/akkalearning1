@@ -16,6 +16,13 @@ lazy val `media-file-encoder` = project.in(file("."))
 
 lazy val `media-manager-service` = project
   .dependsOn(`media-manager-state`)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.scalatest" %% "scalatest" % v.scalatest % Test
+    )
+  )
+
+lazy val `media-manager-state` = project
   .settings(multiJvmSettings: _*)
   .settings(
     scalacOptions in Compile ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlog-reflective-calls", "-Xlint"),
@@ -25,14 +32,6 @@ lazy val `media-manager-service` = project
     mainClass in (Compile, run) := Some("sample.sharding.ShardingApp"),
     // disable parallel tests
     parallelExecution in Test := false,
-    libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % v.scalatest % Test
-    )
-  )
-  .configs (MultiJvm)
-
-lazy val `media-manager-state` = project
-  .settings(
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % v.scalatest % Test,
       "com.typesafe.akka" %% "akka-actor" % v.akka,
@@ -45,6 +44,7 @@ lazy val `media-manager-state` = project
       "io.kamon" % "sigar-loader" % "1.6.6-rev002"
     )
   )
+  .configs (MultiJvm)
 
 lazy val `media-manager-app` = project
   .dependsOn(`media-manager-service`)
