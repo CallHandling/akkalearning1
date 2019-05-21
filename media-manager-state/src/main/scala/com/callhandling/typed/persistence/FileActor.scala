@@ -1,6 +1,7 @@
 package com.callhandling.typed.persistence
 
 import akka.Done
+import akka.actor.Actor
 import akka.typed.Behavior
 import akka.typed.cluster.sharding.EntityTypeKey
 import akka.typed.persistence.scaladsl.PersistentActor
