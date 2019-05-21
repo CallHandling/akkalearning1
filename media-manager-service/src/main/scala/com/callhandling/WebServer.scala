@@ -15,10 +15,8 @@ import akka.util.ByteString
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.io.StdIn
-import java.io.File
-
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.{Display, SetDescription, SetFilename, Setter}
+import com.callhandling.actors.FileActor.{Display, SetDescription, SetFilename}
 
 object WebServer {
   def main(args: Array[String]) {
@@ -26,7 +24,8 @@ object WebServer {
     implicit val materializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
 
-    val fileActor = system.actorOf(FileActor.props, "file-actor")
+    val fileActor = system.actorOf(
+      FileActor.props(java.util.UUID.randomUUID().toString), "file-actor")
     val FileFieldName = "file"
 
     val route = path("fileUpload") {
@@ -65,8 +64,4 @@ object WebServer {
       .flatMap(_.unbind()) // trigger unbinding from the port
       .onComplete(_ => system.terminate()) // and shutdown when done
   }
-
-  trait MultiFormData
-  final case class FileData(dataBytes: Source[ByteString, Any]) extends MultiFormData
-  final case class FormFieldData()
 }
