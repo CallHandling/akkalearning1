@@ -27,18 +27,10 @@ object WebServer {
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, Any]] = formData.parts.mapAsync(1) {
           case part: BodyPart if part.filename.isDefined && part.name == FileFieldName =>
-            Future.successful(FileFieldName -> part.entity.dataBytes)
+
           case part: BodyPart => part.toStrict(2.seconds).map(strict =>
             part.name -> strict.entity.data.utf8String)
         }.runFold(Map.empty[String, Any]) (_ + _)
-
-        val done = futureParts.map { parts =>
-          println(parts(FileFieldName).asInstanceOf[Source[ByteString, Any]].runWith {
-            val file = File.createTempFile("upload", "tmp")
-            FileIO.toPath(file.toPath)
-          })
-          println(parts("description").asInstanceOf[String])
-        }
 
         onSuccess(futureParts) { parts =>
           complete("ok")
