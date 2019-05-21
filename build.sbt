@@ -21,7 +21,10 @@ lazy val `media-manager-service` = project
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % v.scalatest % Test,
       "com.typesafe.akka" %% "akka-http"   % "10.1.8",
-      "com.typesafe.akka" %% "akka-stream" % "2.5.19"
+      "com.typesafe.akka" %% "akka-stream" % "2.5.19",
+
+      // https://mvnrepository.com/artifact/ws.schild/jave-core
+      "ws.schild" % "jave-core" % "2.4.1"
     )
   )
 
