@@ -19,7 +19,9 @@ lazy val `media-manager-service` = project
   .dependsOn(`media-manager-state`)
   .settings(
     libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % v.scalatest % Test
+      "org.scalatest" %% "scalatest" % v.scalatest % Test,
+      "com.typesafe.akka" %% "akka-http"   % "10.1.8",
+      "com.typesafe.akka" %% "akka-stream" % "2.5.19"
     )
   )
 
