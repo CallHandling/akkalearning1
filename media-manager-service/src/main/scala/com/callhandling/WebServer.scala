@@ -17,24 +17,41 @@ import scala.concurrent.duration._
 import scala.io.StdIn
 import java.io.File
 
+import com.callhandling.actors.FileActor
+import com.callhandling.actors.FileActor.{Display, SetDescription, SetFilename, Setter}
+
 object WebServer {
   def main(args: Array[String]) {
     implicit val system = ActorSystem("my-system")
     implicit val materializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
 
+    val fileActor = system.actorOf(FileActor.props, "file-actor")
     val FileFieldName = "file"
 
     val route = path("fileUpload") {
       entity(as[Multipart.FormData]) { formData =>
-        val futureParts: Future[Map[String, Any]] = formData.parts.mapAsync(1) {
+        val futureParts: Future[Done] = formData.parts.mapAsync(1) {
           case part: BodyPart if part.filename.isDefined && part.name == FileFieldName =>
+            Future(fileActor ! SetFilename(part.filename.get))
+          case part: BodyPart =>
+            part.toStrict(2.seconds).map { strict =>
+              val data = strict.entity.data.utf8String
 
-          case part: BodyPart => part.toStrict(2.seconds).map(strict =>
-            part.name -> strict.entity.data.utf8String)
-        }.runFold(Map.empty[String, Any]) (_ + _)
+              fileActor ! (part.name match {
+                case "description" => SetDescription(data)
+              })
+            }
 
-        onSuccess(futureParts) { parts =>
+            part.name match {
+              case "description" => part.toStrict(2.seconds).map { strict =>
+                fileActor ! SetDescription(strict.entity.data.utf8String)
+              }
+            }
+        }.runWith(Sink.ignore)
+
+        onSuccess(futureParts) { _ =>
+          fileActor ! Display
           complete("ok")
         }
       }
