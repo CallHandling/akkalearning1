@@ -14,7 +14,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.{Display, Increment, SetDescription, SetFilename}
+import com.callhandling.actors.FileActor.{SetDetails}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -25,11 +25,11 @@ object WebServer {
     implicit val system = ActorSystem("my-system")
     implicit val materializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
-    implicit val timeout = Timeout(5 seconds)
 
     val fileActor = system.actorOf(
       FileActor.props(java.util.UUID.randomUUID().toString), "file-actor")
     val FileFieldName = "file"
+    val FormFields = List("description")
 
     lazy val fileSink = Sink.actorRefWithAck(fileActor,
       onInitMessage = FileActor.StreamInitialized,
@@ -39,28 +39,19 @@ object WebServer {
 
     val route = path("fileUpload") {
       entity(as[Multipart.FormData]) { formData =>
-        val futureParts: Future[Done] = formData.parts.mapAsync(1) {
+        val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
           case part: BodyPart if part.filename.isDefined && part.name == FileFieldName =>
             part.entity.dataBytes.runWith(fileSink)
-            Future.successful(fileActor ! SetFilename(part.filename.get))
-          case part: BodyPart =>
-            part.toStrict(2.seconds).map { strict =>
-              val data = strict.entity.data.utf8String
+            Future.successful("filename" -> part.filename.get)
+          case part: BodyPart if FormFields.contains(part.name) =>
+            part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
+        }.runFold(Map.empty[String, String])(_ + _)
 
-              fileActor ! (part.name match {
-                case "description" => SetDescription(data)
-              })
-            }
-
-            part.name match {
-              case "description" => part.toStrict(2.seconds).map { strict =>
-                fileActor ! SetDescription(strict.entity.data.utf8String)
-              }
-            }
-        }.runWith(Sink.ignore)
-
-        onSuccess(futureParts) { _ =>
-          fileActor ! Display
+        onSuccess(futureParts) { details =>
+          fileActor ! SetDetails(
+            filename = details("filename"),
+            description = details("description")
+          )
           complete("ok")
         }
       }

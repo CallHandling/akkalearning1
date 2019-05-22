@@ -6,10 +6,7 @@ import akka.util.ByteString
 object FileActor {
   def props(id: String): Props = Props(FileActor(id))
 
-  final case class SetFilename(filename: String)
-  final case class SetDescription(description: String)
-  case object InfoUpdated
-  case object Display
+  final case class SetDetails(filename: String, description: String)
 
   // Streaming messages
   case object Ack
@@ -21,26 +18,24 @@ object FileActor {
 case class FileActor(id: String) extends Actor with ActorLogging {
   import FileActor._
 
-  def update(filename: String, counter: Int, fileContent: ByteString, description: String): Unit =
-    context.become(receive(filename, counter, fileContent, description), discardOld = true)
+  def update(filename: String, fileContent: ByteString, description: String): Unit =
+    context.become(receive(filename, fileContent, description), discardOld = true)
 
-  def receive(filename: String, counter: Int, fileContent: ByteString, description: String): Receive = {
-    case SetFilename(newFilename) =>
-      update(newFilename, counter, fileContent, description)
-      sender() ! InfoUpdated
-    case SetDescription(newDescription) => update(filename, counter, fileContent, newDescription)
+  def receive(filename: String, fileContent: ByteString, description: String): Receive = {
+    case SetDetails(newFilename, newDescription) => update(newFilename, fileContent, newDescription)
     case StreamInitialized =>
       log.info("Stream initialized")
       sender() ! Ack
     case data: ByteString =>
       log.info("Received element: {}", data)
-      update(filename, counter, fileContent ++ data, description)
+      update(filename, fileContent ++ data, description)
       sender() ! Ack
-    case StreamCompleted => log.info("Stream completed.")
+    case StreamCompleted =>
+      log.info("Stream completed.")
+      log.info("ID: {}, Filename: {}, Description: {}, Content: {}",
+        id, filename, description, fileContent)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
-    case Display =>
-      println(s"ID: $id, Filename: $filename, Description: $description, Content: $fileContent Counter: $counter")
   }
 
-  override def receive = receive("", 0, ByteString.empty, "")
+  override def receive = receive("", ByteString.empty, "")
 }
