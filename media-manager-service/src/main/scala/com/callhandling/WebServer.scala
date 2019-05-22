@@ -14,7 +14,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.{Display, SetDescription, SetFilename}
+import com.callhandling.actors.FileActor.{Display, Increment, SetDescription, SetFilename}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -31,11 +31,18 @@ object WebServer {
       FileActor.props(java.util.UUID.randomUUID().toString), "file-actor")
     val FileFieldName = "file"
 
+    lazy val fileSink = Sink.actorRefWithAck(fileActor,
+      onInitMessage = FileActor.StreamInitialized,
+      ackMessage = FileActor.Ack,
+      onCompleteMessage = FileActor.StreamCompleted,
+      onFailureMessage = FileActor.StreamFailure)
+
     val route = path("fileUpload") {
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Done] = formData.parts.mapAsync(1) {
           case part: BodyPart if part.filename.isDefined && part.name == FileFieldName =>
-            fileActor ? SetFilename(part.filename.get)
+            part.entity.dataBytes.runWith(fileSink)
+            Future.successful(fileActor ! SetFilename(part.filename.get))
           case part: BodyPart =>
             part.toStrict(2.seconds).map { strict =>
               val data = strict.entity.data.utf8String
