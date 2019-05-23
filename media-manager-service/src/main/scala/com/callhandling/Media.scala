@@ -5,57 +5,19 @@ import java.nio.file.{Files, Paths}
 
 import akka.util.ByteString
 import com.callhandling.DataType.Rational
+import com.callhandling.MediaInformation.{AspectRatio, Codec, Color}
 import com.github.kokorin.jaffree.ffprobe.FFprobe
-import com.github.kokorin.jaffree.{Rational=>JRational}
+import com.github.kokorin.jaffree.{Rational => JRational}
 
 object DataType {
   final case class Rational(numerator: Long, denominator: Long)
 
-  implicit def jRationalToRational(jRational: JRational): Rational =
-    Rational(jRational.numerator, jRational.denominator)
+  implicit def jRationalToRational(jRational: JRational): Option[Rational] =
+    Option(jRational).map(rational =>
+      Rational(rational.numerator, rational.denominator))
 }
 
 object MediaInformation {
-  sealed trait MediaInformation
-  case object EmptyMediaInformation extends MediaInformation
-  final case class NonEmptyMediaInformation(index: Int,
-    tag: String => Option[String],
-    codec: Codec,
-    profile: Option[String],
-    extraData: Option[String],
-    width: Option[Int],
-    height: Option[Int],
-    codeWidth: Option[Int],
-    codeHeight: Option[Int],
-    hasBFrames: Option[Int],
-    aspectRatio: AspectRatio,
-    pixFmt: Option[String],
-    level: Option[Int],
-    color: Color,
-    chromaLocation: Option[String],
-    fieldOrder: Option[String],
-    timecode: Option[String],
-    refs: Option[Int],
-    sampleFmt: Option[String],
-    sampleRate: Option[Int],
-    channels: Option[Int],
-    channelLayout: Option[String],
-    bitsPerSample: Option[Int],
-    id: Option[String],
-    rFrameRate: Option[Rational],
-    avgFrameRate: Option[Rational],
-    timeBase: Option[String],
-    startPts: Option[Long],
-    startTime: Option[Float],
-    durationTs: Option[Long],
-    duration: Option[Float],
-    bitRate: Option[Int],
-    maxBitRate: Option[Int],
-    bitsPerRawSample: Option[Int],
-    nbFrames: Option[Int],
-    nbReadFrames: Option[Int],
-    nbReadPackets: Option[Int])
-
   def extractFrom(uuid: String, data: ByteString) = {
     // TODO: Consider making these two values configurable (as opposed to being hardcoded values)
     val bin = Paths.get("/usr/bin/")
@@ -80,7 +42,7 @@ object MediaInformation {
         codec = Codec(
           name = Option(stream.getCodecName),
           longName = Option(stream.getCodecLongName),
-          timeBase = Option(stream.getCodecTimeBase),
+          timeBase = stream.getCodecTimeBase,
           tag = Option(stream.getCodecTag),
           tagString = Option(stream.getCodecTagString)
         ),
@@ -91,8 +53,8 @@ object MediaInformation {
         codeHeight = Option(stream.getCodedHeight),
         hasBFrames = Option(stream.hasBFrames),
         aspectRatio = AspectRatio(
-          sample = Option(stream.getSampleAspectRatio),
-          display = Option(stream.getDisplayAspectRatio)
+          sample = stream.getSampleAspectRatio,
+          display = stream.getDisplayAspectRatio
         ),
         pixFmt = Option(stream.getPixFmt),
         level = Option(stream.getLevel),
@@ -112,8 +74,8 @@ object MediaInformation {
         channelLayout = Option(stream.getChannelLayout),
         bitsPerSample = Option(stream.getBitsPerSample),
         id = Option(stream.getId),
-        rFrameRate = Option(stream.getRFrameRate),
-        avgFrameRate = Option(stream.getAvgFrameRate),
+        rFrameRate = stream.getRFrameRate,
+        avgFrameRate = stream.getAvgFrameRate,
         timeBase = Option(stream.getTimeBase),
         startPts = Option(stream.getStartPts),
         startTime = Option(stream.getStartTime),
@@ -142,3 +104,43 @@ object MediaInformation {
     transfer: Option[String],
     primaries: Option[String])
 }
+
+sealed trait MediaInformation
+case object EmptyMediaInformation extends MediaInformation
+final case class NonEmptyMediaInformation(index: Int,
+  tag: String => Option[String],
+  codec: Codec,
+  profile: Option[String],
+  extraData: Option[String],
+  width: Option[Int],
+  height: Option[Int],
+  codeWidth: Option[Int],
+  codeHeight: Option[Int],
+  hasBFrames: Option[Int],
+  aspectRatio: AspectRatio,
+  pixFmt: Option[String],
+  level: Option[Int],
+  color: Color,
+  chromaLocation: Option[String],
+  fieldOrder: Option[String],
+  timecode: Option[String],
+  refs: Option[Int],
+  sampleFmt: Option[String],
+  sampleRate: Option[Int],
+  channels: Option[Int],
+  channelLayout: Option[String],
+  bitsPerSample: Option[Int],
+  id: Option[String],
+  rFrameRate: Option[Rational],
+  avgFrameRate: Option[Rational],
+  timeBase: Option[String],
+  startPts: Option[Long],
+  startTime: Option[Float],
+  durationTs: Option[Long],
+  duration: Option[Float],
+  bitRate: Option[Int],
+  maxBitRate: Option[Int],
+  bitsPerRawSample: Option[Int],
+  nbFrames: Option[Int],
+  nbReadFrames: Option[Int],
+  nbReadPackets: Option[Int]) extends MediaInformation

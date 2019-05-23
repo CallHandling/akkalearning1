@@ -2,7 +2,7 @@ package com.callhandling.actors
 
 import akka.actor.{Actor, ActorLogging, Props}
 import akka.util.ByteString
-import com.callhandling.MediaInformation
+import com.callhandling.{EmptyMediaInformation, MediaInformation}
 
 object FileActor {
   def props(id: String): Props = Props(FileActor(id))
@@ -19,26 +19,31 @@ object FileActor {
 case class FileActor(id: String) extends Actor with ActorLogging {
   import FileActor._
 
-  def update(filename: String, fileContent: ByteString, description: String): Unit =
-    context.become(receive(filename, fileContent, description), discardOld = true)
+  def update(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Unit =
+    context.become(receive(filename, fileContent, description, mediaInfo), discardOld = true)
 
-  def receive(filename: String, fileContent: ByteString, description: String): Receive = {
-    case SetDetails(newFilename, newDescription) => update(newFilename, fileContent, newDescription)
+  def receive(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Receive = {
+    case SetDetails(newFilename, newDescription) =>
+      update(newFilename, fileContent, newDescription, mediaInfo)
 
     case StreamInitialized =>
       log.info("Stream initialized")
       sender() ! Ack
     case data: ByteString =>
       log.info("Received element: {}", data)
-      update(filename, fileContent ++ data, description)
+      update(filename, fileContent ++ data, description, mediaInfo)
       sender() ! Ack
     case StreamCompleted =>
       log.info("Stream completed.")
       log.info("ID: {}, Filename: {}, Description: {}, Content: {}",
         id, filename, description, fileContent)
-      MediaInformation.extractFrom(id, fileContent)
+
+      val newMediaInfo = MediaInformation.extractFrom(id, fileContent)
+      log.info("Media Information: {}", newMediaInfo)
+
+      update(filename, fileContent, description, newMediaInfo)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
   }
 
-  override def receive = receive("", ByteString.empty, "")
+  override def receive = receive("", ByteString.empty, "", EmptyMediaInformation)
 }
