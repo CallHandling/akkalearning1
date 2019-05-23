@@ -18,13 +18,15 @@ lazy val `media-file-encoder` = project.in(file("."))
 lazy val `media-manager-service` = project
   .dependsOn(`media-manager-state`)
   .settings(
+    // TODO: Clean this up and remove the unnecessary dependencies
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % v.scalatest % Test,
       "com.typesafe.akka" %% "akka-http"   % "10.1.8",
       "com.typesafe.akka" %% "akka-stream" % "2.5.19",
 
-      // https://mvnrepository.com/artifact/ws.schild/jave-core
-      "ws.schild" % "jave-core" % "2.4.1"
+      "com.github.kokorin.jaffree" % "jaffree" % "0.8.3",
+
+      "org.slf4j" % "slf4j-api" % "1.7.25"
     )
   )
 
