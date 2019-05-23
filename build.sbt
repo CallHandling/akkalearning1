@@ -26,7 +26,9 @@ lazy val `media-manager-service` = project
 
       "com.github.kokorin.jaffree" % "jaffree" % "0.8.3",
 
-      "org.slf4j" % "slf4j-api" % "1.7.25"
+      "org.slf4j" % "slf4j-api" % "1.7.25",
+
+      "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.8"
     )
   )
 

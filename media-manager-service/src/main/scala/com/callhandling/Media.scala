@@ -6,6 +6,7 @@ import java.nio.file.{Files, Paths}
 import akka.util.ByteString
 import com.callhandling.DataType.Rational
 import com.callhandling.MediaInformation.{AspectRatio, Codec, Color}
+import com.github.kokorin.jaffree.ffmpeg.FFmpeg
 import com.github.kokorin.jaffree.ffprobe.FFprobe
 import com.github.kokorin.jaffree.{Rational => JRational}
 
