@@ -1,13 +1,8 @@
 package com.callhandling.actors
 
-import java.io.{ByteArrayInputStream, File, PipedInputStream}
-import java.nio.file.{Files, Paths}
-
 import akka.actor.{Actor, ActorLogging, Props}
 import akka.util.ByteString
-import com.callhandling.EmptyMediaInformation
-import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeInput}
-import com.github.kokorin.jaffree.ffprobe.FFprobe
+import com.callhandling.MediaInformation
 
 object FileActor {
   def props(id: String): Props = Props(FileActor(id))
@@ -41,11 +36,9 @@ case class FileActor(id: String) extends Actor with ActorLogging {
       log.info("Stream completed.")
       log.info("ID: {}, Filename: {}, Description: {}, Content: {}",
         id, filename, description, fileContent)
-      extractMediaInformation(id, fileContent)
+      MediaInformation.extractFrom(id, fileContent)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
   }
-
-
 
   override def receive = receive("", ByteString.empty, "")
 }
