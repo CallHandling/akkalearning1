@@ -19,6 +19,12 @@ import scala.concurrent.duration._
 import scala.io.StdIn
 
 object Service {
+  final case class UploadResult(id: String, mediaInfo: MediaInformation)
+
+  trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+    implicit val uploadResultFormat = jsonFormat2(UploadResult)
+  }
+
   def start(): Unit = {
     implicit val system = ActorSystem("my-system")
     implicit val materializer = ActorMaterializer()
@@ -50,7 +56,7 @@ object Service {
             filename = details("filename"),
             description = details("description")
           )
-          complete("ok")
+          complete()
         }
       }
     }

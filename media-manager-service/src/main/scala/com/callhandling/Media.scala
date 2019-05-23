@@ -5,7 +5,7 @@ import java.nio.file.{Files, Paths}
 
 import akka.util.ByteString
 import com.callhandling.DataType.Rational
-import com.callhandling.MediaInformation.{AspectRatio, Codec, Color}
+import com.callhandling.MediaInformation.{AspectRatio, Bits, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
 import com.github.kokorin.jaffree.ffmpeg.FFmpeg
 import com.github.kokorin.jaffree.ffprobe.FFprobe
 import com.github.kokorin.jaffree.{Rational => JRational}
@@ -37,7 +37,8 @@ object MediaInformation {
     if (result.getStreams.size < 1) EmptyMediaInformation
     else {
       val stream = result.getStreams.get(0)
-      NonEmptyMediaInformation(index = stream.getIndex,
+
+      NonEmptyMediaInformation(index = getIndex,
         tag = { key => Option(stream.getTag(key)) },
         profile = Option(stream.getProfile),
         codec = Codec(
@@ -48,10 +49,14 @@ object MediaInformation {
           tagString = Option(stream.getCodecTagString)
         ),
         extraData = Option(stream.getExtradata),
-        width = Option(stream.getWidth),
-        height = Option(stream.getHeight),
-        codeWidth = Option(stream.getCodedWidth),
-        codeHeight = Option(stream.getCodedHeight),
+        dimensions = Dimensions(
+          width = Option(stream.getWidth),
+          height = Option(stream.getHeight)
+        ),
+        codeDimensions = Dimensions(
+          width = Option(stream.getCodedWidth),
+          height = Option(stream.getCodedHeight)
+        ),
         hasBFrames = Option(stream.hasBFrames),
         aspectRatio = AspectRatio(
           sample = stream.getSampleAspectRatio,
@@ -67,27 +72,37 @@ object MediaInformation {
         ),
         chromaLocation = Option(stream.getChromaLocation),
         fieldOrder = Option(stream.getFieldOrder),
-        timecode = Option(stream.getTimecode),
         refs = Option(stream.getRefs),
-        sampleFmt = Option(stream.getSampleFmt),
-        sampleRate = Option(stream.getSampleRate),
+        samples = Samples(
+          fmt = Option(stream.getSampleFmt),
+          rate = Option(stream.getSampleRate)
+        ),
         channels = Option(stream.getChannels),
         channelLayout = Option(stream.getChannelLayout),
-        bitsPerSample = Option(stream.getBitsPerSample),
+        bits = Bits(
+          perSample = Option(stream.getBitsPerSample),
+          rate = Option(stream.getBitRate),
+          maxRate = Option(stream.getMaxBitRate),
+          perRawSample = Option(stream.getBitsPerRawSample)
+        ),
         id = Option(stream.getId),
-        rFrameRate = stream.getRFrameRate,
-        avgFrameRate = stream.getAvgFrameRate,
-        timeBase = Option(stream.getTimeBase),
-        startPts = Option(stream.getStartPts),
-        startTime = Option(stream.getStartTime),
-        duration = Option(stream.getDuration),
-        durationTs = Option(stream.getDurationTs),
-        bitRate = Option(stream.getBitRate),
-        maxBitRate = Option(stream.getMaxBitRate),
-        bitsPerRawSample = Option(stream.getBitsPerRawSample),
-        nbFrames = Option(stream.getNbFrames),
-        nbReadFrames = Option(stream.getNbReadFrames),
-        nbReadPackets = Option(stream.getNbReadPackets))
+        frameRates = FrameRates(
+          r = stream.getRFrameRate,
+          avg = stream.getAvgFrameRate
+        ),
+        time = Time(
+          code = Option(stream.getTimecode),
+          base = Option(stream.getTimeBase),
+          startPts = Option(stream.getStartPts),
+          startTime = Option(stream.getStartTime),
+          duration = Option(stream.getDuration),
+          durationTs = Option(stream.getDurationTs)
+        ),
+        nb = Nb(
+          frames = Option(stream.getNbFrames),
+          readFrames = Option(stream.getNbReadFrames),
+          readPackets = Option(stream.getNbReadPackets)
+        ))
     }
   }
 
@@ -104,6 +119,25 @@ object MediaInformation {
     space: Option[String],
     transfer: Option[String],
     primaries: Option[String])
+
+  final case class Dimensions(width: Option[Int], height: Option[Int])
+
+  final case class Bits(perSample: Option[Int],
+    rate: Option[Int], maxRate: Option[Int], perRawSample: Option[Int])
+
+  final case class Nb(frames: Option[Int],
+    readFrames: Option[Int], readPackets: Option[Int])
+
+  final case class Samples(fmt: Option[String], rate: Option[Int])
+
+  final case class FrameRates(r: Option[Rational], avg: Option[Rational])
+
+  final case class Time(code: Option[String],
+    base: Option[String],
+    startPts: Option[Long],
+    startTime: Option[Float],
+    durationTs: Option[Long],
+    duration: Option[Float])
 }
 
 sealed trait MediaInformation
@@ -113,10 +147,8 @@ final case class NonEmptyMediaInformation(index: Int,
   codec: Codec,
   profile: Option[String],
   extraData: Option[String],
-  width: Option[Int],
-  height: Option[Int],
-  codeWidth: Option[Int],
-  codeHeight: Option[Int],
+  dimensions: Dimensions,
+  codeDimensions: Dimensions,
   hasBFrames: Option[Int],
   aspectRatio: AspectRatio,
   pixFmt: Option[String],
@@ -124,24 +156,12 @@ final case class NonEmptyMediaInformation(index: Int,
   color: Color,
   chromaLocation: Option[String],
   fieldOrder: Option[String],
-  timecode: Option[String],
   refs: Option[Int],
-  sampleFmt: Option[String],
-  sampleRate: Option[Int],
+  samples: Samples,
   channels: Option[Int],
   channelLayout: Option[String],
-  bitsPerSample: Option[Int],
+  bits: Bits,
   id: Option[String],
-  rFrameRate: Option[Rational],
-  avgFrameRate: Option[Rational],
-  timeBase: Option[String],
-  startPts: Option[Long],
-  startTime: Option[Float],
-  durationTs: Option[Long],
-  duration: Option[Float],
-  bitRate: Option[Int],
-  maxBitRate: Option[Int],
-  bitsPerRawSample: Option[Int],
-  nbFrames: Option[Int],
-  nbReadFrames: Option[Int],
-  nbReadPackets: Option[Int]) extends MediaInformation
+  frameRates: FrameRates,
+  time: Time,
+  nb: Nb) extends MediaInformation
