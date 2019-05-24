@@ -20,10 +20,18 @@ object FileActor {
 case class FileActor(id: String) extends Actor with ActorLogging with Stash {
   import FileActor._
 
-  def update(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Unit =
-    context.become(gathering(filename, fileContent, description, mediaInfo), discardOld = true)
+  type State = (String, ByteString, String, MediaInformation) => Receive
 
-  def gathering(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Receive = {
+  implicit def gatheringState: State = gathering
+
+  def update(filename: String,
+      fileContent: ByteString,
+      description: String,
+      mediaInfo: MediaInformation)
+      (implicit state: State): Unit =
+    context.become(state(filename, fileContent, description, mediaInfo), discardOld = true)
+
+  def gathering: State = (filename, fileContent, description, mediaInfo) => {
     case SetDetails(newFilename, newDescription) =>
       update(newFilename, fileContent, newDescription, mediaInfo)
 
@@ -39,18 +47,13 @@ case class FileActor(id: String) extends Actor with ActorLogging with Stash {
       sender() ! Ack
     case StreamCompleted =>
       log.info("Stream completed.")
-      log.info("ID: {}, Filename: {}, Description: {}, Content: {}",
-        id, filename, description, fileContent)
-
       val newMediaInfo = MediaInformation.extractFrom(id, fileContent)
-      log.info("Media Information: {}", newMediaInfo)
-
       unstashAll()
-      context.become(completed(filename, fileContent, description, newMediaInfo), discardOld = true)
+      update(filename, fileContent, description, newMediaInfo)(completed)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
   }
 
-  def completed(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Receive = {
+  def completed: State = (filename, fileContent, description, mediaInfo) => {
     case GetMediaInformation => sender() ! mediaInfo
   }
 
