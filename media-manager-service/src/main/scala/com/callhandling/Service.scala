@@ -72,18 +72,15 @@ object Service {
             part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
         }.runFold(Map.empty[String, String])(_ + _)
 
-        Await.result(futureParts, timeout.duration).asInstanceOf[Map[String, String]]
-
         onSuccess(futureParts) { details =>
           fileActor ! SetDetails(
             filename = details("filename"),
             description = details("description")
           )
           val mediaInfoF = fileActor ? GetMediaInformation
-          val mediaInfo = Await.result(mediaInfoF, timeout.duration).asInstanceOf[MediaInformation]
-          mediaInfo match {
+          onSuccess(mediaInfoF) {
             case info: NonEmptyMediaInformation => complete(UploadResult(fileId, info))
-            case _ => complete(mediaInfo.toString)
+            case info => complete(info.toString)
           }
         }
       }

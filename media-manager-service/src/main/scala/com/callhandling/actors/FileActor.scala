@@ -1,6 +1,6 @@
 package com.callhandling.actors
 
-import akka.actor.{Actor, ActorLogging, Props}
+import akka.actor.{Actor, ActorLogging, Props, Stash}
 import akka.util.ByteString
 import com.callhandling.{EmptyMediaInformation, MediaInformation}
 
@@ -17,18 +17,18 @@ object FileActor {
   final case class StreamFailure(ex: Throwable)
 }
 
-case class FileActor(id: String) extends Actor with ActorLogging {
+case class FileActor(id: String) extends Actor with ActorLogging with Stash {
   import FileActor._
 
   def update(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Unit =
-    context.become(receive(filename, fileContent, description, mediaInfo), discardOld = true)
+    context.become(gathering(filename, fileContent, description, mediaInfo), discardOld = true)
 
-  def receive(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Receive = {
+  def gathering(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Receive = {
     case SetDetails(newFilename, newDescription) =>
       update(newFilename, fileContent, newDescription, mediaInfo)
-    case GetMediaInformation =>
-      log.info("Media Information: {}", mediaInfo)
-      sender() ! mediaInfo
+
+    // We can't get the media information until we are done gathering it. Stashing if for now.
+    case GetMediaInformation => stash()
 
     case StreamInitialized =>
       log.info("Stream initialized")
@@ -45,9 +45,14 @@ case class FileActor(id: String) extends Actor with ActorLogging {
       val newMediaInfo = MediaInformation.extractFrom(id, fileContent)
       log.info("Media Information: {}", newMediaInfo)
 
-      update(filename, fileContent, description, newMediaInfo)
+      unstashAll()
+      context.become(completed(filename, fileContent, description, newMediaInfo), discardOld = true)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
   }
 
-  override def receive = receive("", ByteString.empty, "", EmptyMediaInformation)
+  def completed(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Receive = {
+    case GetMediaInformation => sender() ! mediaInfo
+  }
+
+  override def receive = gathering("", ByteString.empty, "", EmptyMediaInformation)
 }
