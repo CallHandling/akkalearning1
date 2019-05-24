@@ -1,15 +1,13 @@
 package com.callhandling.media
 
 object Formats {
-  final case class Format(code: String, description: String="") {
-    val displayName = code.toUpperCase
-  }
+  final case class Format(code: String, description: String="")
 
   object Videos {
     lazy val _3gp = Format("3gp")
     lazy val _3g2 = Format("3g2")
-    lazy val AVI = Format("avi")
-    lazy val FLV = Format("flv")
+    lazy val AVI = Format("avi", "Audio Video Interleave")
+    lazy val FLV = Format("flv", "Flash Video")
     lazy val MKV = Format("mkv")
     lazy val MOV = Format("mov")
     lazy val MP4 = Format("mp4")

@@ -1,9 +1,16 @@
 package com.callhandling.media
 
-import java.nio.file.{Files, Path}
+import java.io.ByteArrayInputStream
+import java.net.URLConnection
 
 object Converter {
-  def getOutputFormats(path: Path) = ???
-  def isAudio(path: Path) = ???
-  def isVideo(path: Path) = ???
+  def getOutputFormats(data: Array[Byte]) = {
+    val mimeType = URLConnection.guessContentTypeFromStream(new ByteArrayInputStream(data))
+    val isAudio = mimeType.startsWith("audio")
+    val isVideo = mimeType.startsWith("video")
+
+    if (isAudio) Formats.Audios.all
+    else if (isVideo) Formats.Videos.all
+    else Nil
+  }
 }

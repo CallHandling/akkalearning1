@@ -15,7 +15,8 @@ import akka.util.Timeout
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.MediaInformation.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.{GetMediaInformation, SetDetails}
+import com.callhandling.actors.FileActor.{GetMediaInformation, GetOutputFormats, SetDetails}
+import com.callhandling.media.Formats.Format
 import com.callhandling.media.NonEmptyMediaInformation
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
@@ -24,7 +25,9 @@ import scala.concurrent.duration._
 import scala.io.StdIn
 
 object Service {
-  final case class UploadResult(id: String, mediaInfo: NonEmptyMediaInformation)
+  final case class UploadResult(id: String, mediaInfo:
+    NonEmptyMediaInformation,
+    outputFormats: List[Format])
 
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
     type RJF[A] = RootJsonFormat[A]
@@ -41,7 +44,8 @@ object Service {
     implicit val timeFormat: RJF[Time] = jsonFormat6(Time)
     implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
     implicit val nonEmptyMediaInformationFormat: RJF[NonEmptyMediaInformation] = jsonFormat21(NonEmptyMediaInformation)
-    implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat2(UploadResult)
+    implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
+    implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat3(UploadResult)
   }
 
   def start(): Unit = {
@@ -80,7 +84,11 @@ object Service {
           )
           val mediaInfoF = fileActor ? GetMediaInformation
           onSuccess(mediaInfoF) {
-            case info: NonEmptyMediaInformation => complete(UploadResult(fileId, info))
+            case info: NonEmptyMediaInformation =>
+              onSuccess(fileActor ? GetOutputFormats) {
+                case outputFormats: List[Format] => complete(UploadResult(fileId, info, outputFormats))
+                case _ => complete("Format can not be process")
+              }
             case _ => complete("Media is required")
           }
         }
