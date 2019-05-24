@@ -8,6 +8,7 @@ object FileActor {
   def props(id: String): Props = Props(FileActor(id))
 
   final case class SetDetails(filename: String, description: String)
+  case object GetMediaInformation
 
   // Streaming messages
   case object Ack
@@ -25,6 +26,9 @@ case class FileActor(id: String) extends Actor with ActorLogging {
   def receive(filename: String, fileContent: ByteString, description: String, mediaInfo: MediaInformation): Receive = {
     case SetDetails(newFilename, newDescription) =>
       update(newFilename, fileContent, newDescription, mediaInfo)
+    case GetMediaInformation =>
+      log.info("Media Information: {}", mediaInfo)
+      sender() ! mediaInfo
 
     case StreamInitialized =>
       log.info("Stream initialized")

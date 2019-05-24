@@ -8,30 +8,51 @@ import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.server.Directives.{as, entity, path}
 import akka.http.scaladsl.server.directives.FutureDirectives.onSuccess
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
+import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
+import akka.util.Timeout
+import com.callhandling.DataType.Rational
+import com.callhandling.MediaInformation.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.SetDetails
-import spray.json.DefaultJsonProtocol
+import com.callhandling.actors.FileActor.{GetMediaInformation, SetDetails}
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
-import scala.concurrent.Future
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 import scala.io.StdIn
 
 object Service {
-  final case class UploadResult(id: String, mediaInfo: MediaInformation)
+  final case class UploadResult(id: String, mediaInfo: NonEmptyMediaInformation)
 
-  trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-    implicit val uploadResultFormat = jsonFormat2(UploadResult)
+  object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+    type RJF[A] = RootJsonFormat[A]
+
+    implicit val rationalFormat: RJF[Rational] = jsonFormat2(Rational)
+    implicit val codecFormat: RJF[Codec] = jsonFormat5(Codec)
+    implicit val aspectRationFormat: RJF[AspectRatio] = jsonFormat2(AspectRatio)
+    implicit val colorFormat: RJF[Color] = jsonFormat4(Color)
+    implicit val dimensionsFormat: RJF[Dimensions] = jsonFormat2(Dimensions)
+    implicit val bitsFormat: RJF[Bits] = jsonFormat4(Bits)
+    implicit val nbFormat: RJF[Nb] = jsonFormat3(Nb)
+    implicit val samplesFormat: RJF[Samples] = jsonFormat2(Samples)
+    implicit val frameRatesFormat: RJF[FrameRates] = jsonFormat2(FrameRates)
+    implicit val timeFormat: RJF[Time] = jsonFormat6(Time)
+    implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
+    implicit val nonEmptyMediaInformationFormat: RJF[NonEmptyMediaInformation] = jsonFormat21(NonEmptyMediaInformation)
+    implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat2(UploadResult)
   }
 
   def start(): Unit = {
-    implicit val system = ActorSystem("my-system")
-    implicit val materializer = ActorMaterializer()
-    implicit val executionContext = system.dispatcher
+    import JsonSupport._
 
-    val fileActor = system.actorOf(
-      FileActor.props(java.util.UUID.randomUUID().toString), "file-actor")
+    implicit val system: ActorSystem = ActorSystem("my-system")
+    implicit val materializer: ActorMaterializer = ActorMaterializer()
+    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+    implicit val timeout: Timeout = 2.seconds
+
+    val fileId = java.util.UUID.randomUUID().toString
+    val fileActor = system.actorOf(FileActor.props(fileId), "file-actor")
     val FileFieldName = "file"
     val FormFields = List("description")
 
@@ -51,12 +72,19 @@ object Service {
             part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
         }.runFold(Map.empty[String, String])(_ + _)
 
+        Await.result(futureParts, timeout.duration).asInstanceOf[Map[String, String]]
+
         onSuccess(futureParts) { details =>
           fileActor ! SetDetails(
             filename = details("filename"),
             description = details("description")
           )
-          complete()
+          val mediaInfoF = fileActor ? GetMediaInformation
+          val mediaInfo = Await.result(mediaInfoF, timeout.duration).asInstanceOf[MediaInformation]
+          mediaInfo match {
+            case info: NonEmptyMediaInformation => complete(UploadResult(fileId, info))
+            case _ => complete(mediaInfo.toString)
+          }
         }
       }
     }

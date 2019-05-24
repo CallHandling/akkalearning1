@@ -5,7 +5,7 @@ import java.nio.file.{Files, Paths}
 
 import akka.util.ByteString
 import com.callhandling.DataType.Rational
-import com.callhandling.MediaInformation.{AspectRatio, Bits, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
+import com.callhandling.MediaInformation.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
 import com.github.kokorin.jaffree.ffmpeg.FFmpeg
 import com.github.kokorin.jaffree.ffprobe.FFprobe
 import com.github.kokorin.jaffree.{Rational => JRational}
@@ -22,11 +22,14 @@ object MediaInformation {
   def extractFrom(uuid: String, data: ByteString) = {
     // TODO: Consider making these two values configurable (as opposed to being hardcoded values)
     val bin = Paths.get("/usr/bin/")
-    val tempDir = "/tmp/akkalearning"
+    val homeDir = {
+      val homeDir = System.getProperty("user.home")
+      s"$homeDir/akkalearning"
+    }
 
     val inputStream = new ByteArrayInputStream(data.toArray)
 
-    val path = new File(s"$tempDir/$uuid").toPath
+    val path = new File(s"$homeDir/$uuid").toPath
     Files.write(path, data.toArray)
 
     val result = FFprobe.atPath(bin)
@@ -38,8 +41,7 @@ object MediaInformation {
     else {
       val stream = result.getStreams.get(0)
 
-      NonEmptyMediaInformation(index = getIndex,
-        tag = { key => Option(stream.getTag(key)) },
+      NonEmptyMediaInformation(index = stream.getIndex,
         profile = Option(stream.getProfile),
         codec = Codec(
           name = Option(stream.getCodecName),
@@ -77,8 +79,10 @@ object MediaInformation {
           fmt = Option(stream.getSampleFmt),
           rate = Option(stream.getSampleRate)
         ),
-        channels = Option(stream.getChannels),
-        channelLayout = Option(stream.getChannelLayout),
+        channel = Channel(
+          channels = Option(stream.getChannels),
+          layout = Option(stream.getChannelLayout),
+        ),
         bits = Bits(
           perSample = Option(stream.getBitsPerSample),
           rate = Option(stream.getBitRate),
@@ -138,12 +142,14 @@ object MediaInformation {
     startTime: Option[Float],
     durationTs: Option[Long],
     duration: Option[Float])
+
+  final case class Channel(channels: Option[Int], layout: Option[String])
 }
 
 sealed trait MediaInformation
 case object EmptyMediaInformation extends MediaInformation
 final case class NonEmptyMediaInformation(index: Int,
-  tag: String => Option[String],
+  //tag: String => Option[String],
   codec: Codec,
   profile: Option[String],
   extraData: Option[String],
@@ -158,8 +164,7 @@ final case class NonEmptyMediaInformation(index: Int,
   fieldOrder: Option[String],
   refs: Option[Int],
   samples: Samples,
-  channels: Option[Int],
-  channelLayout: Option[String],
+  channel: Channel,
   bits: Bits,
   id: Option[String],
   frameRates: FrameRates,
