@@ -2,7 +2,7 @@ package com.callhandling.actors
 
 import akka.actor.{Actor, ActorLogging, Props, Stash}
 import akka.util.ByteString
-import com.callhandling.{EmptyMediaInformation, MediaInformation}
+import com.callhandling.media.{EmptyMediaInformation, MediaInformation}
 
 object FileActor {
   def props(id: String): Props = Props(FileActor(id))
@@ -35,7 +35,7 @@ case class FileActor(id: String) extends Actor with ActorLogging with Stash {
     case SetDetails(newFilename, newDescription) =>
       update(newFilename, fileContent, newDescription, mediaInfo)
 
-    // We can't get the media information until we are done gathering it. Stashing if for now.
+    // We can't get the media information until we are done gathering them. Let's stash this request for now.
     case GetMediaInformation => stash()
 
     case StreamInitialized =>

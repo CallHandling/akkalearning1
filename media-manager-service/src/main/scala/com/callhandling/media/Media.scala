@@ -1,12 +1,11 @@
-package com.callhandling
+package com.callhandling.media
 
 import java.io.{ByteArrayInputStream, File}
 import java.nio.file.{Files, Paths}
 
 import akka.util.ByteString
-import com.callhandling.DataType.Rational
-import com.callhandling.MediaInformation.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
-import com.github.kokorin.jaffree.ffmpeg.FFmpeg
+import com.callhandling.media.DataType.Rational
+import com.callhandling.media.MediaInformation._
 import com.github.kokorin.jaffree.ffprobe.FFprobe
 import com.github.kokorin.jaffree.{Rational => JRational}
 

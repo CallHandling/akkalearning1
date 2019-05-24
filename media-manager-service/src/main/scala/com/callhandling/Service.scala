@@ -12,10 +12,11 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
-import com.callhandling.DataType.Rational
-import com.callhandling.MediaInformation.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
+import com.callhandling.media.DataType.Rational
+import com.callhandling.media.MediaInformation.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
 import com.callhandling.actors.FileActor
 import com.callhandling.actors.FileActor.{GetMediaInformation, SetDetails}
+import com.callhandling.media.NonEmptyMediaInformation
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
@@ -80,7 +81,7 @@ object Service {
           val mediaInfoF = fileActor ? GetMediaInformation
           onSuccess(mediaInfoF) {
             case info: NonEmptyMediaInformation => complete(UploadResult(fileId, info))
-            case info => complete(info.toString)
+            case _ => complete("Media is required")
           }
         }
       }
