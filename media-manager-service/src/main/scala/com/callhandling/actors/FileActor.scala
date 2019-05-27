@@ -1,6 +1,6 @@
 package com.callhandling.actors
 
-import akka.actor.{Actor, ActorLogging, Props, Stash}
+import akka.actor.{Actor, ActorLogging, FSM, Props, Stash}
 import akka.util.ByteString
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.{Converter, StreamDetails}
@@ -19,12 +19,12 @@ object FileActor {
   final case class StreamFailure(ex: Throwable)
 }
 
-case class FileActor(id: String) extends Actor with ActorLogging with Stash {
+case class FileActor(id: String) extends FSM[] with ActorLogging with Stash {
   import FileActor._
 
   type State = (String, ByteString, String, List[StreamDetails], List[Format]) => Receive
 
-  implicit def gatheringState: State = gathering
+  implicit val gatheringState: State = gathering
 
   def update(filename: String,
       fileContent: ByteString,
@@ -60,9 +60,13 @@ case class FileActor(id: String) extends Actor with ActorLogging with Stash {
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
   }
 
-  def completed: State = (_, _, _, mediaInfo, outputFormats) => {
-    case GetMediaInformation => sender() ! mediaInfo
-    case GetOutputFormats => sender() ! outputFormats
+  def completed: State = (filename, fileContent, description, streams, outputFormats) => {
+    case GetMediaInformation =>
+      sender() ! streams
+      update(filename, fileContent, description, streams, outputFormats)
+    case GetOutputFormats =>
+      sender() ! outputFormats
+      update(filename, fileContent, description, streams, outputFormats)
   }
 
   override def receive = gathering("", ByteString.empty, "", Nil, Nil)

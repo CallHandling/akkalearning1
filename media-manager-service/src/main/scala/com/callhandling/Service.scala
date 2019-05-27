@@ -62,8 +62,6 @@ class Service {
 
   val fileId = java.util.UUID.randomUUID().toString
   val fileActor = system.actorOf(FileActor.props(fileId), "file-actor")
-  val FileFieldName = "file"
-  val FormFields = List("description")
 
   lazy val fileSink = Sink.actorRefWithAck(fileActor,
     onInitMessage = FileActor.StreamInitialized,
@@ -75,10 +73,10 @@ class Service {
     post {
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
-          case part: BodyPart if part.filename.isDefined && part.name == FileFieldName =>
+          case part: BodyPart if part.filename.isDefined && part.name == "file" =>
             part.entity.dataBytes.runWith(fileSink)
             Future.successful("filename" -> part.filename.get)
-          case part: BodyPart if FormFields.contains(part.name) =>
+          case part: BodyPart if part.name == "description" =>
             part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
         }.runFold(Map.empty[String, String])(_ + _)
 
@@ -101,10 +99,9 @@ class Service {
       }
     }
   }
-
   /*
   def convertRoute = path("convertFile") {
-    post {
+    formFields('fileId, 'format) { (fieldId, format) =>
 
     }
   }*/
