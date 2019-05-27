@@ -16,8 +16,8 @@ import com.callhandling.actors.FileActor
 import com.callhandling.actors.FileActor.{GetMediaInformation, GetOutputFormats, SetDetails}
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.MediaInformation._
-import com.callhandling.media.NonEmptyMediaInformation
+import com.callhandling.media.StreamDetails
+import com.callhandling.media.StreamDetails._
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.concurrent.duration._
@@ -25,8 +25,8 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 object Service {
-  final case class UploadResult(id: String, mediaInfo:
-    NonEmptyMediaInformation,
+  final case class UploadResult(id: String, streams:
+    List[StreamDetails],
     outputFormats: List[Format])
 
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
@@ -43,7 +43,7 @@ object Service {
     implicit val frameRatesFormat: RJF[FrameRates] = jsonFormat2(FrameRates)
     implicit val timeFormat: RJF[Time] = jsonFormat6(Time)
     implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
-    implicit val nonEmptyMediaInformationFormat: RJF[NonEmptyMediaInformation] = jsonFormat21(NonEmptyMediaInformation)
+    implicit val streamDetailsFormat: RJF[StreamDetails] = jsonFormat21(StreamDetails.apply)
     implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat3(UploadResult)
   }
@@ -90,7 +90,7 @@ class Service {
 
           val mediaInfoF = fileActor ? GetMediaInformation
           onSuccess(mediaInfoF) {
-            case info: NonEmptyMediaInformation =>
+            case info: List[StreamDetails] =>
               onSuccess(fileActor ? GetOutputFormats) {
                 case outputFormats: List[Format] => complete(UploadResult(fileId, info, outputFormats))
                 case _ => complete("Format can not be process")
@@ -101,6 +101,13 @@ class Service {
       }
     }
   }
+
+  /*
+  def convertRoute = path("convertFile") {
+    post {
+
+    }
+  }*/
 
   def restart(): Unit = {
     val route = uploadRoute

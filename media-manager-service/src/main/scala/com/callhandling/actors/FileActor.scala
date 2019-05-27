@@ -3,7 +3,7 @@ package com.callhandling.actors
 import akka.actor.{Actor, ActorLogging, Props, Stash}
 import akka.util.ByteString
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.{Converter, EmptyMediaInformation, MediaInformation}
+import com.callhandling.media.{Converter, StreamDetails}
 
 object FileActor {
   def props(id: String): Props = Props(FileActor(id))
@@ -22,21 +22,21 @@ object FileActor {
 case class FileActor(id: String) extends Actor with ActorLogging with Stash {
   import FileActor._
 
-  type State = (String, ByteString, String, MediaInformation, List[Format]) => Receive
+  type State = (String, ByteString, String, List[StreamDetails], List[Format]) => Receive
 
   implicit def gatheringState: State = gathering
 
   def update(filename: String,
       fileContent: ByteString,
       description: String,
-      mediaInfo: MediaInformation,
+      streams: List[StreamDetails],
       outputFormats: List[Format])
       (implicit state: State): Unit =
-    context.become(state(filename, fileContent, description, mediaInfo, outputFormats), discardOld = true)
+    context.become(state(filename, fileContent, description, streams, outputFormats), discardOld = true)
 
-  def gathering: State = (filename, fileContent, description, mediaInfo, outputFormats) => {
+  def gathering: State = (filename, fileContent, description, streams, outputFormats) => {
     case SetDetails(newFilename, newDescription) =>
-      update(newFilename, fileContent, newDescription, mediaInfo, outputFormats)
+      update(newFilename, fileContent, newDescription, streams, outputFormats)
 
     // We can't get the media information and output formats until we are done gathering them.
     // Let's stash this request for now.
@@ -47,16 +47,16 @@ case class FileActor(id: String) extends Actor with ActorLogging with Stash {
       sender() ! Ack
     case data: ByteString =>
       log.info("Received element: {}", data)
-      update(filename, fileContent ++ data, description, mediaInfo, outputFormats)
+      update(filename, fileContent ++ data, description, streams, outputFormats)
       sender() ! Ack
     case StreamCompleted =>
       log.info("Stream completed.")
 
-      val newMediaInfo = MediaInformation.extractFrom(id, fileContent)
+      val streams = StreamDetails.extractFrom(id, fileContent)
       val newOutputFormats = Converter.getOutputFormats(fileContent.toArray)
 
       unstashAll()
-      update(filename, fileContent, description, newMediaInfo, newOutputFormats)(completed)
+      update(filename, fileContent, description, streams, newOutputFormats)(completed)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
   }
 
@@ -65,6 +65,5 @@ case class FileActor(id: String) extends Actor with ActorLogging with Stash {
     case GetOutputFormats => sender() ! outputFormats
   }
 
-  override def receive =
-    gathering("", ByteString.empty, "", EmptyMediaInformation, Nil)
+  override def receive = gathering("", ByteString.empty, "", Nil, Nil)
 }

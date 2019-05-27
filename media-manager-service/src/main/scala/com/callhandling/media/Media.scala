@@ -1,13 +1,17 @@
 package com.callhandling.media
 
-import java.io.{ByteArrayInputStream, File}
+import java.io.File
 import java.nio.file.{Files, Paths}
 
 import akka.util.ByteString
 import com.callhandling.media.DataType.Rational
-import com.callhandling.media.MediaInformation._
+import com.callhandling.media.StreamDetails._
 import com.github.kokorin.jaffree.ffprobe.FFprobe
 import com.github.kokorin.jaffree.{Rational => JRational}
+
+import com.github.kokorin.jaffree.ffprobe.Stream
+
+import scala.collection.JavaConverters._
 
 object DataType {
   final case class Rational(numerator: Long, denominator: Long)
@@ -17,30 +21,18 @@ object DataType {
       Rational(rational.numerator, rational.denominator))
 }
 
-object MediaInformation {
-  def extractFrom(uuid: String, data: ByteString) = {
-    // TODO: Consider making these two values configurable (as opposed to being hardcoded values)
-    val bin = Paths.get("/usr/bin/")
-    val homeDir = {
-      val homeDir = System.getProperty("user.home")
-      s"$homeDir/akkalearning"
-    }
-
-    val inputStream = new ByteArrayInputStream(data.toArray)
-
-    val path = new File(s"$homeDir/$uuid").toPath
+object StreamDetails {
+  def extractFrom(uuid: String, data: ByteString): List[StreamDetails] = {
+    val path = new File(s"${FFmpegConf.HomeDir}/$uuid").toPath
     Files.write(path, data.toArray)
 
-    val result = FFprobe.atPath(bin)
+    val result = FFprobe.atPath(FFmpegConf.Bin)
       .setInput(path)
       .setShowStreams(true)
       .execute()
 
-    if (result.getStreams.size < 1) EmptyMediaInformation
-    else {
-      val stream = result.getStreams.get(0)
-
-      NonEmptyMediaInformation(index = stream.getIndex,
+    asScalaIterator[Stream](result.getStreams.iterator()).map { stream =>
+      StreamDetails(index = stream.getIndex,
         profile = Option(stream.getProfile),
         codec = Codec(
           name = Option(stream.getCodecName),
@@ -106,7 +98,7 @@ object MediaInformation {
           readFrames = Option(stream.getNbReadFrames),
           readPackets = Option(stream.getNbReadPackets)
         ))
-    }
+    }.toList
   }
 
   final case class Codec(name: Option[String],
@@ -145,9 +137,7 @@ object MediaInformation {
   final case class Channel(channels: Option[Int], layout: Option[String])
 }
 
-sealed trait MediaInformation
-case object EmptyMediaInformation extends MediaInformation
-final case class NonEmptyMediaInformation(index: Int,
+final case class StreamDetails(index: Int,
   //tag: String => Option[String],
   codec: Codec,
   profile: Option[String],
@@ -168,4 +158,4 @@ final case class NonEmptyMediaInformation(index: Int,
   id: Option[String],
   frameRates: FrameRates,
   time: Time,
-  nb: Nb) extends MediaInformation
+  nb: Nb)
