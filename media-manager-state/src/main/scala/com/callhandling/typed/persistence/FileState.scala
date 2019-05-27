@@ -1,27 +1,18 @@
 package com.callhandling.typed.persistence
 
-import akka.protobuf.ByteString
-import akka.stream.scaladsl.Source
+import akka.util.ByteString
 
-sealed trait FileStatus
-case object StartStatus extends FileStatus
-case object InProgressStatus extends FileStatus
-case object FailStatus extends FileStatus
-case object FinishStatus extends FileStatus
+sealed trait FileState
 
-object FileState {
-  val empty = FileState(None, isUploaded = false)
+final case class InitState(fileId: String) extends FileState
+
+final case class InProgressState(file: UploadFile)  extends FileState {
+  def withFile(newFile: UploadFile): FileState = copy(file = UploadFile(file.fileId, file.byteString.concat(newFile.byteString)))
+  def fileId: String = file.fileId
 }
 
-final case class FileState(file: Option[UploadFile], isUploaded: Boolean) {
-  def withFile(newFile: UploadFile): FileState = copy(file = Some(newFile))
-
-  def isEmpty: Boolean = file.isEmpty
-
-  def id: String = file match {
-    case Some(f) => f.fileId
-    case None => throw new IllegalStateException("id unknown before UploadFile is created")
-  }
+final case class FinishState(file: UploadFile) extends FileState {
+  def fileId: String = file.fileId
 }
 
-final case class UploadFile(fileId: String, fileStream: Source[ByteString, Any])
+final case class UploadFile(fileId: String, byteString: ByteString)

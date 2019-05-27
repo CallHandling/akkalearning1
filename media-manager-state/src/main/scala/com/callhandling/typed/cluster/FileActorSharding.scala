@@ -1,56 +1,37 @@
 package com.callhandling.typed.cluster
 
 import java.io.File
-import java.util.concurrent.CountDownLatch
 
-import akka.actor.ActorSystem
+import akka.actor.typed.ActorSystem
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
+import akka.cluster.typed.{Cluster, Join}
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.typed.Props
-import akka.typed.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
-import akka.typed.scaladsl.adapter._
-import com.callhandling.typed.persistence.{FileActor, FileCommand, PassivateFile}
+import com.callhandling.typed.persistence.{FileActor, PassivateCommand}
 import com.typesafe.config.{Config, ConfigFactory}
+
 
 object FileActorSharding {
 
-  def main(args: Array[String]): Unit = {
-    args.headOption match {
+  val shardRegion = "ClusterSystem"
 
-      case None =>
-        startClusterInSameJvm()
-
-      case Some(portString) if portString.matches("""\d+""") =>
-        val port = portString.toInt
-        startNode(port)
-
-      case Some("cassandra") =>
-        startCassandraDatabase()
-        println("Started Cassandra, press Ctrl + C to kill")
-        new CountDownLatch(1).await()
-
-    }
-  }
-
-  def startClusterInSameJvm(): Unit = {
+  def startClusterInSameJvm: ClusterSharding = {
     startCassandraDatabase()
-
     startNode(2551)
     startNode(2552)
     startNode(2553)
   }
 
-  def startNode(port: Int): Unit = {
-    val system = ActorSystem("ClusterSystem", config(port))
-    val typedSystem = system.toTyped
-
-    ClusterSharding(typedSystem).spawn[FileCommand](
-      behavior = FileActor.shardingBehavior,
-      props = Props.empty,
-      typeKey = FileActor.ShardingTypeName,
-      settings = ClusterShardingSettings(typedSystem),
-      maxNumberOfShards = FileActor.MaxNumberOfShards,
-      handOffStopMessage = PassivateFile)
-
+  def startNode(port: Int): ClusterSharding = {
+    val system = akka.actor.ActorSystem(shardRegion, config(port))
+    val systemTyped = ActorSystem.wrap(system)
+    val sharding = ClusterSharding(systemTyped)
+    Cluster(systemTyped).manager ! Join(Cluster(systemTyped).selfMember.address)
+    sharding.init(
+      Entity(
+        typeKey = FileActor.entityTypeKey,
+        createBehavior = entityContext => FileActor.shardingBehavior(entityContext.entityId))
+      .withStopMessage(PassivateCommand))
+    sharding
   }
 
   def config(port: Int): Config =

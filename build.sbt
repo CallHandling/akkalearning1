@@ -32,7 +32,7 @@ lazy val `media-manager-state` = project
 
       "com.typesafe.akka" %% "akka-actor" % v.akka,
       "com.typesafe.akka" %% "akka-actor-typed" % v.akka,
-//      "com.typesafe.akka" %% "akka-stream" % v.akka,
+      "com.typesafe.akka" %% "akka-stream" % v.akka,
       "com.typesafe.akka" %% "akka-stream-typed" % v.akka,
       "com.typesafe.akka" %% "akka-cluster-typed" % v.akka,
       "com.typesafe.akka" %% "akka-cluster-sharding-typed" % v.akka,
@@ -43,11 +43,7 @@ lazy val `media-manager-state` = project
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
 
       "com.typesafe.akka" %% "akka-http" % "10.1.8",
-//      "com.typesafe.akka" %% "akka-stream" % v.akka,
-//      "com.typesafe.akka" %% "akka-http-experimental" % v.akka,
-//      "com.typesafe.akka" %% "akka-http-spray-json-experimental" % v.akka,
-//      "com.typesafe.akka" %% "akka-http-testkit" % v.akka,
-
+      
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9",
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.9.9"
     ),

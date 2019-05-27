@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+    single_file: true
+    flat_package: true
+};
+
+option java_package = "com.callhandling.typed.persistence.protobuf";
+option optimize_for = SPEED;
+
+// state
+
+message InitState {
+    string fileId = 1;
+}
+
+message InProgressState {
+    UploadFile file = 1;
+}
+
+
+message FinishState {
+    UploadFile file = 1;
+}
+
+message UploadFile {
+    string fileId = 1;
+    bytes byteString = 2;
+}
+
+// commands
+
+message UploadInProgressCommand {
+    bytes byteString = 1;
+    string replyTo = 2;
+}
+
+message UploadDone {
+    string fileId = 1;
+}
+
+message UploadedFileCommand {
+    string replyTo = 1;
+}
+
+// events
+
+message UploadEvent {
+    string fileId = 1;
+    UploadFile file = 2;
+}
+
+message UploadedEvent {
+    string fileId = 1;
+}
