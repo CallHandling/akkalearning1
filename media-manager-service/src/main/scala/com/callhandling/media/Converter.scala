@@ -3,9 +3,11 @@ package com.callhandling.media
 import java.io.ByteArrayInputStream
 import java.net.URLConnection
 
+import org.apache.tika.Tika
+
 object Converter {
   def getOutputFormats(data: Array[Byte]) = {
-    val mimeType = URLConnection.guessContentTypeFromStream(new ByteArrayInputStream(data))
+    val mimeType = mimeTypeOf(data)
     val isAudio = mimeType.startsWith("audio")
     val isVideo = mimeType.startsWith("video")
 
@@ -13,4 +15,6 @@ object Converter {
     else if (isVideo) Formats.Videos.all
     else Nil
   }
+
+  def mimeTypeOf: Array[Byte] => String = new Tika().detect
 }

@@ -21,14 +21,16 @@ lazy val `media-manager-service` = project
     // TODO: Clean this up and remove the unnecessary dependencies
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % v.scalatest % Test,
+
       "com.typesafe.akka" %% "akka-http"   % "10.1.8",
       "com.typesafe.akka" %% "akka-stream" % "2.5.19",
+      "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.8",
 
       "com.github.kokorin.jaffree" % "jaffree" % "0.8.3",
 
       "org.slf4j" % "slf4j-api" % "1.7.25",
 
-      "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.8"
+      "org.apache.tika" % "tika-core" % "1.21"
     )
   )
 
