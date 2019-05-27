@@ -5,7 +5,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.Multipart
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
-import akka.http.scaladsl.server.Directives.{as, entity, path}
+import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.directives.FutureDirectives.onSuccess
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.pattern.ask
@@ -48,26 +48,31 @@ object Service {
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat3(UploadResult)
   }
 
-  def start(): Unit = {
-    import JsonSupport._
+  def apply() = new Service
+}
 
-    implicit val system: ActorSystem = ActorSystem("my-system")
-    implicit val materializer: ActorMaterializer = ActorMaterializer()
-    implicit val executionContext: ExecutionContextExecutor = system.dispatcher
-    implicit val timeout: Timeout = 2.seconds
+class Service {
+  import Service._
+  import JsonSupport._
 
-    val fileId = java.util.UUID.randomUUID().toString
-    val fileActor = system.actorOf(FileActor.props(fileId), "file-actor")
-    val FileFieldName = "file"
-    val FormFields = List("description")
+  implicit val system: ActorSystem = ActorSystem("my-system")
+  implicit val materializer: ActorMaterializer = ActorMaterializer()
+  implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+  implicit val timeout: Timeout = 2.seconds
 
-    lazy val fileSink = Sink.actorRefWithAck(fileActor,
-      onInitMessage = FileActor.StreamInitialized,
-      ackMessage = FileActor.Ack,
-      onCompleteMessage = FileActor.StreamCompleted,
-      onFailureMessage = FileActor.StreamFailure)
+  val fileId = java.util.UUID.randomUUID().toString
+  val fileActor = system.actorOf(FileActor.props(fileId), "file-actor")
+  val FileFieldName = "file"
+  val FormFields = List("description")
 
-    val route = path("fileUpload") {
+  lazy val fileSink = Sink.actorRefWithAck(fileActor,
+    onInitMessage = FileActor.StreamInitialized,
+    ackMessage = FileActor.Ack,
+    onCompleteMessage = FileActor.StreamCompleted,
+    onFailureMessage = FileActor.StreamFailure)
+
+  def uploadRoute = path("fileUpload") {
+    post {
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
           case part: BodyPart if part.filename.isDefined && part.name == FileFieldName =>
@@ -82,6 +87,7 @@ object Service {
             filename = details("filename"),
             description = details("description")
           )
+
           val mediaInfoF = fileActor ? GetMediaInformation
           onSuccess(mediaInfoF) {
             case info: NonEmptyMediaInformation =>
@@ -94,8 +100,12 @@ object Service {
         }
       }
     }
+  }
 
-    val bindingFuture = Http().bindAndHandle(route, "localhost", 8080)
+  def restart(): Unit = {
+    val route = uploadRoute
+
+    val bindingFuture = Http().bindAndHandle(uploadRoute, "localhost", 8080)
 
     println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
