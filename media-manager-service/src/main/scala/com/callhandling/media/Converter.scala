@@ -1,8 +1,5 @@
 package com.callhandling.media
 
-import java.io.ByteArrayInputStream
-import java.net.URLConnection
-
 import org.apache.tika.Tika
 
 object Converter {

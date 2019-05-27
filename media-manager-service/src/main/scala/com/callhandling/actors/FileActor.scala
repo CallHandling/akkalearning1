@@ -1,8 +1,5 @@
 package com.callhandling.actors
 
-import java.io.ByteArrayInputStream
-import java.net.URLConnection
-
 import akka.actor.{Actor, ActorLogging, Props, Stash}
 import akka.util.ByteString
 import com.callhandling.media.Formats.Format
@@ -54,8 +51,10 @@ case class FileActor(id: String) extends Actor with ActorLogging with Stash {
       sender() ! Ack
     case StreamCompleted =>
       log.info("Stream completed.")
+
       val newMediaInfo = MediaInformation.extractFrom(id, fileContent)
       val newOutputFormats = Converter.getOutputFormats(fileContent.toArray)
+
       unstashAll()
       update(filename, fileContent, description, newMediaInfo, newOutputFormats)(completed)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")

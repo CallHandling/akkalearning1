@@ -12,16 +12,16 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
-import com.callhandling.media.DataType.Rational
-import com.callhandling.media.MediaInformation.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
 import com.callhandling.actors.FileActor
 import com.callhandling.actors.FileActor.{GetMediaInformation, GetOutputFormats, SetDetails}
+import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
+import com.callhandling.media.MediaInformation._
 import com.callhandling.media.NonEmptyMediaInformation
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
-import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 object Service {
