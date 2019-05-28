@@ -24,7 +24,6 @@ object FileActor {
   final case class StreamFailure(ex: Throwable) extends State
 
   sealed trait Data
-  case object EmptyFileData extends Data
   final case class Details(filename: String, description: String) extends Data
   final case class FileData(fileId: String,
     fileContent: ByteString,
@@ -36,12 +35,12 @@ object FileActor {
 case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with Stash {
   import FileActor._
 
-  startWith(Idle, EmptyFileData)
+  startWith(Idle, FileData(id, ByteString.empty, Details("", ""), Nil, Nil))
 
   when(Idle) {
     case Event(StreamInitialized, _) =>
       sender() ! Ack
-      goto(Uploading).using(FileData(id, ByteString.empty, Details("", ""), Nil, Nil))
+      goto(Uploading)
   }
 
   when(Uploading) {
@@ -66,11 +65,11 @@ case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       goto(Idle)
-    case Event(SetDetails(filename, description), fileData: FileData) =>
-      stay.using(fileData.copy(details = Details(filename = filename, description = description)))
   }
 
   whenUnhandled {
+    case Event(SetDetails(filename, description), fileData: FileData) =>
+      stay.using(fileData.copy(details = Details(filename = filename, description = description)))
     case Event(GetFileData, _) =>
       stash()
       stay
