@@ -62,17 +62,17 @@ class Service {
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
   implicit val timeout: Timeout = 2.seconds
 
-  val fileId = java.util.UUID.randomUUID().toString
-  val fileActor = system.actorOf(FileActor.props(fileId), "file-actor")
-
-  lazy val fileSink = Sink.actorRefWithAck(fileActor,
-    onInitMessage = FileActor.StreamInitialized,
-    ackMessage = FileActor.Ack,
-    onCompleteMessage = FileActor.StreamCompleted,
-    onFailureMessage = FileActor.StreamFailure)
-
   def uploadRoute = path("fileUpload") {
     post {
+      val fileId = java.util.UUID.randomUUID().toString
+      val fileActor = system.actorOf(FileActor.props(fileId), fileId)
+
+      lazy val fileSink = Sink.actorRefWithAck(fileActor,
+        onInitMessage = FileActor.StreamInitialized,
+        ackMessage = FileActor.Ack,
+        onCompleteMessage = FileActor.StreamCompleted,
+        onFailureMessage = FileActor.StreamFailure)
+
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
           case part: BodyPart if part.filename.isDefined && part.name == "file" =>
