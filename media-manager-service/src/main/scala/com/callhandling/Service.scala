@@ -11,9 +11,9 @@ import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
-import akka.util.Timeout
+import akka.util.{ByteString, Timeout}
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.{FileData, GetFileData, SetDetails, Uploading}
+import com.callhandling.actors.FileActor.{Details, FileData, GetFileData, SetDetails, Uploading}
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
@@ -25,8 +25,10 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 object Service {
-  final case class UploadResult(id: String, streams:
-    List[StreamDetails],
+  final case class UploadResult(fileId: String,
+    filename: String,
+    description: String,
+    streams: List[StreamDetails],
     outputFormats: List[Format])
 
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
@@ -45,7 +47,7 @@ object Service {
     implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
     implicit val streamDetailsFormat: RJF[StreamDetails] = jsonFormat21(StreamDetails.apply)
     implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
-    implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat3(UploadResult)
+    implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
   }
 
   def apply() = new Service
@@ -88,8 +90,8 @@ class Service {
 
           val fileDataF = fileActor ? GetFileData
           onSuccess(fileDataF) {
-            case FileData(_, _, streams, outputFormats) =>
-              complete(UploadResult(fileId, streams, outputFormats))
+            case FileData(id, _, Details(filename, description), streams, outputFormats) =>
+              complete(UploadResult(id, filename, description, streams, outputFormats))
             case _ => complete("Can not retrieve file data.")
           }
         }

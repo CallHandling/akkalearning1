@@ -1,6 +1,6 @@
 package com.callhandling.actors
 
-import akka.actor.{Actor, ActorLogging, FSM, Props, Stash}
+import akka.actor.{ActorLogging, FSM, Props, Stash}
 import akka.util.ByteString
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.media.Formats.Format
@@ -24,9 +24,10 @@ object FileActor {
   final case class StreamFailure(ex: Throwable) extends State
 
   sealed trait Data
-  case object Uninitialized extends Data
+  case object EmptyFileData extends Data
   final case class Details(filename: String, description: String) extends Data
-  final case class FileData(fileContent: ByteString,
+  final case class FileData(fileId: String,
+    fileContent: ByteString,
     details: Details,
     streams: List[StreamDetails],
     outputFormats: List[Format]) extends Data
@@ -35,12 +36,12 @@ object FileActor {
 case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with Stash {
   import FileActor._
 
-  startWith(Idle, Uninitialized)
+  startWith(Idle, EmptyFileData)
 
   when(Idle) {
     case Event(StreamInitialized, _) =>
       sender() ! Ack
-      goto(Uploading).using(FileData(ByteString.empty, Details("", ""), Nil, Nil))
+      goto(Uploading).using(FileData(id, ByteString.empty, Details("", ""), Nil, Nil))
   }
 
   when(Uploading) {
@@ -48,9 +49,7 @@ case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with
       log.info("Received element: {}", data)
       sender() ! Ack
       stay.using(fileData.copy(fileContent = fileData.fileContent ++ data))
-    case Event(SetDetails(filename, description), fileData: FileData) =>
-      stay.using(fileData.copy(details = Details(filename = filename, description = description)))
-    case Event(StreamCompleted, fileData @ FileData(fileContent, _, _, _)) =>
+    case Event(StreamCompleted, fileData @ FileData(_, fileContent, _, _, _)) =>
       log.info("Stream completed.")
 
       val streams = StreamDetails.extractFrom(id, fileContent)
@@ -67,6 +66,8 @@ case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       goto(Idle)
+    case Event(SetDetails(filename, description), fileData: FileData) =>
+      stay.using(fileData.copy(details = Details(filename = filename, description = description)))
   }
 
   whenUnhandled {
