@@ -1,21 +1,24 @@
 package com.callhandling.actors
 
-import akka.actor.{ActorLogging, FSM, Props, Stash}
+import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.util.ByteString
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.{Converter, StreamDetails}
 
 object FileActor {
-  def props(id: String): Props = Props(FileActor(id))
+  def props: Props = Props[FileActor]
 
   sealed trait State
   case object Idle extends State
   case object Uploading extends State
 
   // events
-  final case class SetDetails(filename: String, description: String)
+  final case class SetDetails(id: String, details: Details)
   case object GetFileData
+  case object ConvertFile
+  final case class EntityMessage(id: String, message: Any)
 
   // Streaming messages
   case object Ack
@@ -24,18 +27,37 @@ object FileActor {
   final case class StreamFailure(ex: Throwable) extends State
 
   sealed trait Data
+  case object EmptyData extends Data
   final case class Details(filename: String, description: String) extends Data
-  final case class FileData(fileId: String,
-    fileContent: ByteString,
-    details: Details,
-    streams: List[StreamDetails],
-    outputFormats: List[Format]) extends Data
+  final case class FileData(
+      fileId: String,
+      fileContent: ByteString,
+      details: Details,
+      streams: List[StreamDetails],
+      outputFormats: List[Format]) extends Data
+
+  val NumberOfShards = 50
+
+  def startFileSharding(system: ActorSystem): ActorRef = ClusterSharding(system).start(typeName = "FileManager",
+    entityProps = props,
+    settings = ClusterShardingSettings(system),
+    extractEntityId = extractEntityId,
+    extractShardId = extractShardId
+  )
+
+  val extractEntityId: ShardRegion.ExtractEntityId = {
+    case EntityMessage(id, message) => (id, message)
+  }
+
+  val extractShardId: ShardRegion.ExtractShardId = {
+    case EntityMessage(id, _) => (id.hashCode % NumberOfShards).toString
+  }
 }
 
-case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with Stash {
+class FileActor extends FSM[State, Data] with Stash {
   import FileActor._
 
-  startWith(Idle, FileData(id, ByteString.empty, Details("", ""), Nil, Nil))
+  startWith(Idle, EmptyData)
 
   when(Idle) {
     case Event(StreamInitialized, _) =>
@@ -48,7 +70,7 @@ case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with
       log.info("Received element: {}", data)
       sender() ! Ack
       stay.using(fileData.copy(fileContent = fileData.fileContent ++ data))
-    case Event(StreamCompleted, fileData @ FileData(_, fileContent, _, _, _)) =>
+    case Event(StreamCompleted, fileData @ FileData(id, fileContent, _, _, _)) =>
       log.info("Stream completed.")
 
       val streams = StreamDetails.extractFrom(id, fileContent)
@@ -68,8 +90,10 @@ case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with
   }
 
   whenUnhandled {
-    case Event(SetDetails(filename, description), fileData: FileData) =>
-      stay.using(fileData.copy(details = Details(filename = filename, description = description)))
+    case Event(SetDetails(_, details), fileData: FileData) =>
+      stay.using(fileData.copy(details = details))
+    case Event(SetDetails(id, details), EmptyData) =>
+      stay.using(FileData(id, ByteString.empty, details, Nil, Nil))
     case Event(GetFileData, _) =>
       stash()
       stay
