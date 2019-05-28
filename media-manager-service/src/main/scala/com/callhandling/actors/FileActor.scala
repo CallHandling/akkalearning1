@@ -2,72 +2,78 @@ package com.callhandling.actors
 
 import akka.actor.{Actor, ActorLogging, FSM, Props, Stash}
 import akka.util.ByteString
+import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.{Converter, StreamDetails}
 
 object FileActor {
   def props(id: String): Props = Props(FileActor(id))
 
+  sealed trait State
+  case object Idle extends State
+  case object Uploading extends State
+
+  // events
   final case class SetDetails(filename: String, description: String)
-  case object GetMediaInformation
-  case object GetOutputFormats
+  case object GetFileData
 
   // Streaming messages
   case object Ack
-  case object StreamInitialized
-  case object StreamCompleted
-  final case class StreamFailure(ex: Throwable)
+  case object StreamInitialized extends State
+  case object StreamCompleted extends State
+  final case class StreamFailure(ex: Throwable) extends State
+
+  sealed trait Data
+  case object Uninitialized extends Data
+  final case class Details(filename: String, description: String) extends Data
+  final case class FileData(fileContent: ByteString,
+    details: Details,
+    streams: List[StreamDetails],
+    outputFormats: List[Format]) extends Data
 }
 
-case class FileActor(id: String) extends FSM[] with ActorLogging with Stash {
+case class FileActor(id: String) extends FSM[State, Data] with ActorLogging with Stash {
   import FileActor._
 
-  type State = (String, ByteString, String, List[StreamDetails], List[Format]) => Receive
+  startWith(Idle, Uninitialized)
 
-  implicit val gatheringState: State = gathering
-
-  def update(filename: String,
-      fileContent: ByteString,
-      description: String,
-      streams: List[StreamDetails],
-      outputFormats: List[Format])
-      (implicit state: State): Unit =
-    context.become(state(filename, fileContent, description, streams, outputFormats), discardOld = true)
-
-  def gathering: State = (filename, fileContent, description, streams, outputFormats) => {
-    case SetDetails(newFilename, newDescription) =>
-      update(newFilename, fileContent, newDescription, streams, outputFormats)
-
-    // We can't get the media information and output formats until we are done gathering them.
-    // Let's stash this request for now.
-    case GetMediaInformation | GetOutputFormats => stash()
-
-    case StreamInitialized =>
-      log.info("Stream initialized")
+  when(Idle) {
+    case Event(StreamInitialized, _) =>
       sender() ! Ack
-    case data: ByteString =>
+      goto(Uploading).using(FileData(ByteString.empty, Details("", ""), Nil, Nil))
+  }
+
+  when(Uploading) {
+    case Event(data: ByteString, fileData: FileData) =>
       log.info("Received element: {}", data)
-      update(filename, fileContent ++ data, description, streams, outputFormats)
       sender() ! Ack
-    case StreamCompleted =>
+      stay.using(fileData.copy(fileContent = fileData.fileContent ++ data))
+    case Event(SetDetails(filename, description), fileData: FileData) =>
+      stay.using(fileData.copy(details = Details(filename = filename, description = description)))
+    case Event(StreamCompleted, fileData @ FileData(fileContent, _, _, _)) =>
       log.info("Stream completed.")
 
       val streams = StreamDetails.extractFrom(id, fileContent)
-      val newOutputFormats = Converter.getOutputFormats(fileContent.toArray)
+      val outputFormats = Converter.getOutputFormats(fileContent.toArray)
 
       unstashAll()
-      update(filename, fileContent, description, streams, newOutputFormats)(completed)
-    case StreamFailure(ex) => log.error(ex, "Stream failed.")
+      goto(StreamCompleted).using(fileData.copy(streams = streams, outputFormats = outputFormats))
+    case Event(StreamFailure(ex), _) =>
+      log.error(ex, "Stream failed.")
+      goto(Idle)
   }
 
-  def completed: State = (filename, fileContent, description, streams, outputFormats) => {
-    case GetMediaInformation =>
-      sender() ! streams
-      update(filename, fileContent, description, streams, outputFormats)
-    case GetOutputFormats =>
-      sender() ! outputFormats
-      update(filename, fileContent, description, streams, outputFormats)
+  when(StreamCompleted) {
+    case Event(GetFileData, fileData: FileData) =>
+      sender() ! fileData
+      goto(Idle)
   }
 
-  override def receive = gathering("", ByteString.empty, "", Nil, Nil)
+  whenUnhandled {
+    case Event(GetFileData, _) =>
+      stash()
+      stay
+  }
+
+  initialize()
 }

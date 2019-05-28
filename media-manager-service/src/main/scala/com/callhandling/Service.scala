@@ -13,7 +13,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.{GetMediaInformation, GetOutputFormats, SetDetails}
+import com.callhandling.actors.FileActor.{FileData, GetFileData, SetDetails, Uploading}
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
@@ -55,7 +55,7 @@ class Service {
   import Service._
   import JsonSupport._
 
-  implicit val system: ActorSystem = ActorSystem("my-system")
+  implicit val system: ActorSystem = ActorSystem("media-manager-system")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
   implicit val timeout: Timeout = 2.seconds
@@ -86,14 +86,11 @@ class Service {
             description = details("description")
           )
 
-          val mediaInfoF = fileActor ? GetMediaInformation
-          onSuccess(mediaInfoF) {
-            case info: List[StreamDetails] =>
-              onSuccess(fileActor ? GetOutputFormats) {
-                case outputFormats: List[Format] => complete(UploadResult(fileId, info, outputFormats))
-                case _ => complete("Format can not be process")
-              }
-            case _ => complete("Media is required")
+          val fileDataF = fileActor ? GetFileData
+          onSuccess(fileDataF) {
+            case FileData(_, _, streams, outputFormats) =>
+              complete(UploadResult(fileId, streams, outputFormats))
+            case _ => complete("Can not retrieve file data.")
           }
         }
       }
