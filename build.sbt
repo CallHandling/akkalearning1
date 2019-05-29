@@ -1,9 +1,10 @@
+
 ThisBuild / version      := "0.1.0"
 ThisBuild / scalaVersion := "2.12.8"
 ThisBuild / organization := "com.callhandling"
 
 lazy val v = new {
-  val akka = "2.5.22"
+  val akka = "2.5.23"
   val akkaTyped = "2.5.8"
   val scalatest = "3.0.7"
   val junit = "4.12"
@@ -24,6 +25,7 @@ lazy val `media-manager-service` = project
 
 lazy val `media-manager-state` = project
   .settings(
+    resolvers += Resolver.bintrayRepo("julien-lafont", "maven"),
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % v.scalatest % Test,
       "junit" % "junit" % v.junit % Test,
@@ -43,15 +45,13 @@ lazy val `media-manager-state` = project
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
 
       "com.typesafe.akka" %% "akka-http" % "10.1.8",
-      
+
+      "de.heikoseeberger" %% "akka-http-jackson" % "1.25.2",
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9",
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.9.9"
-    ),
-    PB.targets in Compile := Seq(
-      scalapb.gen() -> (sourceManaged in Compile).value
-    ),
-    PB.protoSources in Compile := Seq(file("media-manager-state/src/main/protobuf"))
+    )
   )
+  .enablePlugins(ProtobufPlugin)
 
 lazy val `media-manager-app` = project
   .dependsOn(`media-manager-service`)

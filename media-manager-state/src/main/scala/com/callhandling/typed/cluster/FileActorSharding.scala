@@ -29,7 +29,7 @@ object FileActorSharding {
     sharding.init(
       Entity(
         typeKey = FileActor.entityTypeKey,
-        createBehavior = entityContext => FileActor.shardingBehavior(entityContext.entityId))
+        createBehavior = entityContext => FileActor.shardingBehavior(entityContext.shard, entityContext.entityId))
       .withStopMessage(PassivateCommand))
     sharding
   }

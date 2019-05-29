@@ -1,6 +1,6 @@
 package com.callhandling.typed.persistence
 
-import akka.util.ByteString
+import com.google.protobuf.ByteString
 
 sealed trait FileState
 

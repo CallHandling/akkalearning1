@@ -21,25 +21,30 @@ import scala.util.{Failure, Success}
 object FileUploadApp {
 
   def main(args: Array[String]) {
+    val system = ActorSystem(mainBehavior, "AkkaHttp")
+    system.whenTerminated
+  }
 
-    lazy val mainBehavior: Behavior[NotUsed] =
-      Behaviors.setup {
-        context =>
-          implicit val system = context.system
-          implicit val systemUntyped = akka.actor.ActorSystem("ActorUntyped") //Adapter.toUntyped(system)
-          implicit val materializer: ActorMaterializer = ActorMaterializer()(system)
-          implicit val executionContext = system.executionContext
+  val mainBehavior: Behavior[NotUsed] =
+    Behaviors.setup {
+      context =>
+        implicit val system = context.system
+        implicit val systemUntyped = akka.actor.ActorSystem("ActorUntyped") //Adapter.toUntyped(system)
+        implicit val materializer: ActorMaterializer = ActorMaterializer()(system)
+        implicit val executionContext = system.executionContext
 
-          val route = //uploadFileTest(systemUntyped)
-            withoutSizeLimit {
+        val sharding = FileActorSharding.startClusterInSameJvm
+
+        val route = //uploadFileTest(systemUntyped)
+          withoutSizeLimit {
             path("fileUpload") {
               post {
                 fileUpload("file") {
                   case (fileInfo, fileStream) =>
-                    val sharding = FileActorSharding.startClusterInSameJvm
+
                     val entityId = UUID.randomUUID().toString
                     val entityRef = sharding.entityRefFor(FileActor.entityTypeKey, entityId)
-                    val fileActorSinkRef = context.spawn(FileActorSink(entityRef, context).main, "FileActorSink")
+                    val fileActorSinkRef = context.spawn(FileActorSink(entityRef).main, entityId)
 
                     def fileSink = ActorSink.actorRefWithAck(
                       ref = fileActorSinkRef,
@@ -57,22 +62,18 @@ object FileUploadApp {
             }
           }
 
-          val bindingFuture = Http().bindAndHandle(route, "localhost", 8000)
-          println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
-          StdIn.readLine() // let it run until user presses return
-          bindingFuture
-            .flatMap(_.unbind()) // trigger unbinding from the port
-            .onComplete(_ => system.terminate()) // and shutdown when done
+        val bindingFuture = Http().bindAndHandle(route, "localhost", 8000)
+        context.log.debug(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
+        StdIn.readLine() // let it run until user presses return
+        bindingFuture
+          .flatMap(_.unbind()) // trigger unbinding from the port
+          .onComplete(_ => system.terminate()) // and shutdown when done
 
-          Behaviors.receiveSignal {
-            case (_, Terminated(_)) =>
-              Behaviors.stopped
-          }
-      }
-
-    val system = ActorSystem(mainBehavior, "AkkaHttp")
-    system.whenTerminated
-  }
+        Behaviors.receiveSignal {
+          case (_, Terminated(_)) =>
+            Behaviors.stopped
+        }
+    }
 
   def uploadFileTest(systemUntyped: akka.actor.ActorSystem) = {
     path("fileUpload") {

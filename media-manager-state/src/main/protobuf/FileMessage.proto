@@ -1,0 +1,51 @@
+syntax = "proto2";
+
+package com.callhandling.typed.persistence;
+
+option java_package = "com.callhandling.typed.persistence.protobuf";
+option optimize_for = SPEED;
+
+// state
+
+message InitState {
+    required string fileId = 1;
+}
+
+message InProgressState {
+    required UploadFile file = 1;
+}
+
+message FinishState {
+    required UploadFile file = 1;
+}
+
+message UploadFile {
+    required string fileId = 1;
+    required bytes byteString = 2;
+}
+
+// commands
+
+message UploadInProgressCommand {
+    required bytes byteString = 1;
+    required string replyTo = 2;
+}
+
+message UploadDone {
+    required string fileId = 1;
+}
+
+message UploadedFileCommand {
+    required string replyTo = 1;
+}
+
+// events
+
+message UploadEvent {
+    required string fileId = 1;
+    required UploadFile file = 2;
+}
+
+message UploadedEvent {
+    required string fileId = 1;
+}
