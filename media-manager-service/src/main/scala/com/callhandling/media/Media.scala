@@ -22,7 +22,8 @@ object DataType {
 }
 
 object StreamDetails {
-  def extractFrom(uuid: String, data: ByteString): List[StreamDetails] = {
+  def extractFrom(data: ByteString): List[StreamDetails] = {
+    val uuid = java.util.UUID.randomUUID().toString
     val path = new File(s"${FFmpegConf.HomeDir}/$uuid").toPath
     Files.write(path, data.toArray)
 

@@ -1,6 +1,6 @@
 package com.callhandling
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
@@ -15,6 +15,7 @@ import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import com.callhandling.actors.FileActor
 import com.callhandling.actors.FileActor.{Details, EntityMessage, FileData, GetFileData, SetDetails}
+import com.callhandling.actors.StreamActor.{Ack, StreamCompleted, StreamFailure, StreamInitialized}
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
@@ -22,7 +23,7 @@ import com.callhandling.media.StreamDetails._
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 object Service {
@@ -57,6 +58,7 @@ object Service {
 class Service {
   import Service._
   import JsonSupport._
+  import FileActor._
 
   implicit val system: ActorSystem = ActorSystem("media-manager-system")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
@@ -66,19 +68,24 @@ class Service {
   def uploadRoute = path("fileUpload") {
     post {
       val fileId = java.util.UUID.randomUUID().toString
-      val fileManagerRegion = FileActor.startFileSharding(system)
-      val fileActorMessage: Any => Any = EntityMessage(fileId, _)
+      val fileManagerRegion = FileActor.shardRegion(system)
 
-      lazy val fileSink = Sink.actorRefWithAck(fileManagerRegion,
-        onInitMessage = fileActorMessage(FileActor.StreamInitialized),
-        ackMessage = FileActor.Ack,
-        onCompleteMessage = fileActorMessage(FileActor.StreamCompleted),
-        onFailureMessage = ex => fileActorMessage(FileActor.StreamFailure(ex)))
+      val fileActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
+      val fileActor = Await.result(fileActorF, timeout.duration).asInstanceOf[ActorRef]
+
+      lazy val fileSink = Sink.actorRefWithAck(
+        fileActor,
+        onInitMessage = StreamInitialized,
+        ackMessage = Ack,
+        onCompleteMessage = StreamCompleted,
+        onFailureMessage = StreamFailure)
 
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
           case part: BodyPart if part.filename.isDefined && part.name == "file" =>
-            part.entity.dataBytes.runWith(fileSink)
+            part.entity.dataBytes.mapAsync(1) { data =>
+              Future.successful((fileId, data))
+            }.runWith(fileSink)
             Future.successful("filename" -> part.filename.get)
           case part: BodyPart if part.name == "description" =>
             part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
@@ -94,7 +101,7 @@ class Service {
 
           val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
           onSuccess(fileDataF) {
-            case FileData(id, _, Details(filename, description), streams, outputFormats) =>
+            case FileData(id, Details(filename, description), streams, outputFormats, _) =>
               complete(UploadResult(id, filename, description, streams, outputFormats))
             case _ => complete(HttpResponse(InternalServerError, entity = "Could not retrieve file data"))
           }
