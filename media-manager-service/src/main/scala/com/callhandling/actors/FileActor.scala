@@ -12,27 +12,38 @@ object FileActor {
   def props: Props = Props[FileActor]
 
   sealed trait State
+
   case object Idle extends State
+
   case object Uploading extends State
+
   case object UploadDone extends State
 
   // events
   case object SetUpStream
+
   final case class SetDetails(id: String, details: Details)
+
   final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
+
   case object GetFileData
+
   case object ConvertFile
+
   final case class EntityMessage(id: String, message: Any)
 
   sealed trait Data
+
   case object EmptyData extends Data
+
   final case class Details(filename: String, description: String) extends Data
+
   final case class FileData(
-      fileId: String,
-      details: Details,
-      streams: List[StreamDetails],
-      outputFormats: List[Format],
-      streamActor: ActorRef) extends Data
+                             fileId: String,
+                             details: Details,
+                             streams: List[StreamDetails],
+                             outputFormats: List[Format],
+                             streamActor: ActorRef) extends Data
 
   val NumberOfShards = 50
 
@@ -53,14 +64,15 @@ object FileActor {
   }
 }
 
-class FileActor extends FSM[State, Data] with Stash {
+class FileActor extends FSM[State, Data] with Stash with ActorLogging {
+
   import FileActor._
 
   startWith(Idle, EmptyData)
 
   when(Idle) {
     case Event(SetUpStream, _) =>
-      println("hjhdjhsdhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"+sender())
+      log.info("Receive command from {}", sender())
       sender() ! context.actorOf(Props[StreamActor])
       stay
     case Event(StreamInitialized, _) =>

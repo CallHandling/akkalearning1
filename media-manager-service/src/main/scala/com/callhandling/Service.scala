@@ -27,11 +27,12 @@ import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 object Service {
+
   final case class UploadResult(fileId: String,
-    filename: String,
-    description: String,
-    streams: List[StreamDetails],
-    outputFormats: List[Format])
+                                filename: String,
+                                description: String,
+                                streams: List[StreamDetails],
+                                outputFormats: List[Format])
 
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
     type RJF[A] = RootJsonFormat[A]
@@ -52,24 +53,20 @@ object Service {
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
   }
 
-  def apply() = new Service
+  def apply(fileManagerRegion: ActorRef)(implicit system: ActorSystem, materializer: ActorMaterializer, timeout: Timeout) = new Service(fileManagerRegion)
 }
 
-class Service {
+class Service(fileManagerRegion: ActorRef)(implicit system: ActorSystem, materializer: ActorMaterializer, timeout: Timeout) {
+
   import Service._
   import JsonSupport._
   import FileActor._
 
-  implicit val system: ActorSystem = ActorSystem("media-manager-system")
-  implicit val materializer: ActorMaterializer = ActorMaterializer()
-  implicit val executionContext: ExecutionContextExecutor = system.dispatcher
-  implicit val timeout: Timeout = 5.seconds
+  implicit val ec = system.dispatcher
 
   def uploadRoute = path("fileUpload") {
     post {
       val fileId = java.util.UUID.randomUUID().toString
-      val fileManagerRegion = FileActor.shardRegion(system)
-
       val fileActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
       val fileActor = Await.result(fileActorF, timeout.duration).asInstanceOf[ActorRef]
 
@@ -94,10 +91,10 @@ class Service {
         onSuccess(futureParts) { details =>
           fileManagerRegion ! EntityMessage(
             fileId, SetDetails(
-            id = fileId,
-            details = Details(
-              filename = details("filename"),
-              description = details("description"))))
+              id = fileId,
+              details = Details(
+                filename = details("filename"),
+                description = details("description"))))
 
           val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
           onSuccess(fileDataF) {
@@ -120,7 +117,7 @@ class Service {
   def restart(): Unit = {
     val route = uploadRoute
 
-    val bindingFuture = Http().bindAndHandle(uploadRoute, "localhost", 8080)
+    val bindingFuture = Http().bindAndHandle(uploadRoute, "localhost", 8089)
 
     println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
