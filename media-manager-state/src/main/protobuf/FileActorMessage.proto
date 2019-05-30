@@ -24,6 +24,38 @@ message UploadFile {
     required bytes byteString = 2;
 }
 
+message UploadedFile {
+    required string fileId = 1;
+    required bytes byteString = 2;
+    optional MultimediaFileInfo fileInfo = 3;
+}
+
+message MultimediaFileInfo {
+    required string format = 1;
+    required int64 duration = 2;
+    optional AudioFileInfo audio = 3;
+    optional VideoFileInfo video = 4;
+}
+
+message AudioFileInfo {
+    required string decoder = 1;
+    required int32 samplingRate = 2;
+    required int32 channels = 3;
+    required int32 bitRate = 4;
+}
+
+message VideoFileInfo {
+    required string decoder = 1;
+    optional VideoDimension dimension = 2;
+    required int32 bitRate = 3;
+    required float frameRate = 4;
+}
+
+message VideoDimension {
+    required int32 width = 1;
+    required int32 height = 2;
+}
+
 // commands
 
 message UploadInProgressCommand {

@@ -10,10 +10,9 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
-import akka.stream.scaladsl.{FileIO}
+import akka.stream.scaladsl.FileIO
 import akka.stream.typed.scaladsl.{ActorMaterializer, ActorSink}
-import com.callhandling.typed.cluster.{FileActorSharding, FileActorSink}
-import com.callhandling.typed.persistence.FileActor
+import com.callhandling.typed.persistence.{FileActor, FileActorSharding, FileActorSink}
 
 import scala.io.StdIn
 import scala.util.{Failure, Success}
@@ -63,7 +62,7 @@ object FileUploadApp {
           }
 
         val bindingFuture = Http().bindAndHandle(route, "localhost", 8000)
-        context.log.debug(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
+        context.log.info("Server online at http://localhost:8080/\nPress RETURN to stop...")
         StdIn.readLine() // let it run until user presses return
         bindingFuture
           .flatMap(_.unbind()) // trigger unbinding from the port

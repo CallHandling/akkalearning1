@@ -1,4 +1,4 @@
-package com.callhandling.typed.cluster
+package com.callhandling.typed.persistence
 
 import java.io.File
 
@@ -6,16 +6,14 @@ import akka.actor.typed.ActorSystem
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity}
 import akka.cluster.typed.{Cluster, Join}
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import com.callhandling.typed.persistence.{FileActor, PassivateCommand}
 import com.typesafe.config.{Config, ConfigFactory}
-
 
 object FileActorSharding {
 
   val shardRegion = "ClusterSystem"
 
   def startClusterInSameJvm: ClusterSharding = {
-    startCassandraDatabase()
+    //startCassandraDatabase()
     startNode(2551)
     startNode(2552)
     startNode(2553)

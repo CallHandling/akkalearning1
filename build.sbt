@@ -48,7 +48,10 @@ lazy val `media-manager-state` = project
 
       "de.heikoseeberger" %% "akka-http-jackson" % "1.25.2",
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.9.9"
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.9.9",
+
+      "ws.schild" % "jave-core" % "2.4.6",
+      "ws.schild" % "jave-native-linux64" % "2.4.6"
     )
   )
   .enablePlugins(ProtobufPlugin)
