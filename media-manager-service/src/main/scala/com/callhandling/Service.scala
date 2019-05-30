@@ -63,7 +63,7 @@ class Service {
   implicit val system: ActorSystem = ActorSystem("media-manager-system")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
-  implicit val timeout: Timeout = 2.seconds
+  implicit val timeout: Timeout = 5.seconds
 
   def uploadRoute = path("fileUpload") {
     post {

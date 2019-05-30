@@ -38,7 +38,7 @@ object FileActor {
 
   def shardRegion(system: ActorSystem): ActorRef = ClusterSharding(system).start(
     typeName = "FileManager",
-    entityProps = props,
+    entityProps = Props[FileActor],
     settings = ClusterShardingSettings(system),
     extractEntityId = extractEntityId,
     extractShardId = extractShardId
@@ -60,6 +60,7 @@ class FileActor extends FSM[State, Data] with Stash {
 
   when(Idle) {
     case Event(SetUpStream, _) =>
+      println("hjhdjhsdhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"+sender())
       sender() ! context.actorOf(Props[StreamActor])
       stay
     case Event(StreamInitialized, _) =>
