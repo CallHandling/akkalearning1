@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package com.callhandling.typed.persistence.protobuf;
+
+// state
+
+message InitState {
+    string fileId = 1;
+}
+
+message InProgressState {
+    UploadFile file = 1;
+}
+
+message FinishState {
+    UploadFile file = 1;
+}
+
+message UploadFile {
+    string fileId = 1;
+    bytes byteString = 2;
+}
+
+message UploadedFile {
+    string fileId = 1;
+    bytes byteString = 2;
+    MultimediaFileInfo fileInfo = 3;
+}
+
+message MultimediaFileInfo {
+    string format = 1;
+    int64 duration = 2;
+    AudioFileInfo audio = 3;
+    VideoFileInfo video = 4;
+}
+
+message AudioFileInfo {
+    string decoder = 1;
+    int32 samplingRate = 2;
+    int32 channels = 3;
+    int32 bitRate = 4;
+}
+
+message VideoFileInfo {
+    string decoder = 1;
+    VideoDimension dimension = 2;
+    int32 bitRate = 3;
+    float frameRate = 4;
+}
+
+message VideoDimension {
+    int32 width = 1;
+    int32 height = 2;
+}
+
+// commands
+
+message UploadInProgressCommand {
+    bytes byteString = 1;
+    string replyTo = 2;
+}
+
+message UploadDone {
+    string fileId = 1;
+}
+
+message UploadedFileCommand {
+    string replyTo = 1;
+}
+
+// events
+
+message UploadEvent {
+    string fileId = 1;
+    UploadFile file = 2;
+}
+
+message UploadedEvent {
+    string fileId = 1;
+}

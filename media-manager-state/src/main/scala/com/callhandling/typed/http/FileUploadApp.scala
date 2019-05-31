@@ -1,7 +1,6 @@
 package com.callhandling.typed.http
 
 import java.nio.file.Paths
-import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.typed.{ActorSystem, Behavior, Terminated}
@@ -12,7 +11,8 @@ import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.stream.scaladsl.FileIO
 import akka.stream.typed.scaladsl.{ActorMaterializer, ActorSink}
-import com.callhandling.typed.persistence.{FileActor, FileActorSharding, FileActorSink}
+import com.callhandling.typed.cluster.ActorSharding
+import com.callhandling.typed.persistence.{FileActor, FileActorSink, FileListActor}
 
 import scala.io.StdIn
 import scala.util.{Failure, Success}
@@ -32,7 +32,8 @@ object FileUploadApp {
         implicit val materializer: ActorMaterializer = ActorMaterializer()(system)
         implicit val executionContext = system.executionContext
 
-        val sharding = FileActorSharding.startClusterInSameJvm
+        val fileActorSharding = ActorSharding(FileActor, 3)
+        val fileListActorSharding = ActorSharding(FileListActor, 3)
 
         val route = //uploadFileTest(systemUntyped)
           withoutSizeLimit {
@@ -41,9 +42,9 @@ object FileUploadApp {
                 fileUpload("file") {
                   case (fileInfo, fileStream) =>
 
-                    val entityId = UUID.randomUUID().toString
-                    val entityRef = sharding.entityRefFor(FileActor.entityTypeKey, entityId)
-                    val fileActorSinkRef = context.spawn(FileActorSink(entityRef).main, entityId)
+                    val fileActorEntityRef = fileActorSharding.entityRefFor(FileActor.entityTypeKey, ActorSharding.generateEntityId)
+                    val fileListActorEntityRef = fileListActorSharding.entityRefFor(FileListActor.entityTypeKey, ActorSharding.generateEntityId)
+                    val fileActorSinkRef = context.spawn(FileActorSink(fileActorEntityRef, fileListActorEntityRef).main, ActorSharding.generateEntityId)
 
                     def fileSink = ActorSink.actorRefWithAck(
                       ref = fileActorSinkRef,

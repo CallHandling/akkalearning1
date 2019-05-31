@@ -3,18 +3,25 @@ package com.callhandling.typed.persistence
 import java.nio.file.{Files, Paths}
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityTypeKey, EventSourcedEntity}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey, EventSourcedEntity}
+import akka.cluster.typed.{Cluster, Join}
 import akka.persistence.typed.scaladsl.Effect
+import com.callhandling.typed.cluster.ActorSharding
 import com.google.protobuf.ByteString
+import com.typesafe.config.Config
 import ws.schild.jave.{AudioInfo, MultimediaInfo, MultimediaObject, VideoInfo, VideoSize}
 
 import scala.concurrent.duration._
-
+//import FileActorMessage._
+//import FileActorMessage.Command._
+//import FileActorMessage.Event._
+//import FileActorMessage.State._
+//import FileActorMessage.Response._
 
 sealed trait FileCommand
-final case object IdleCommand extends FileCommand
-final case object PassivateCommand extends FileCommand
+final case object IdleFileCommand extends FileCommand
+final case object PassivateFileCommand extends FileCommand
 final case class UploadInProgressCommand(byteString: ByteString, replyTo: ActorRef[UploadFile]) extends FileCommand
 final case class UploadedFileCommand(replyTo: ActorRef[UploadedFile]) extends FileCommand
 
@@ -56,12 +63,24 @@ object VideoDimension {
 }
 
 
-object FileActor {
+object FileActor extends ActorSharding[FileCommand] {
 
   val entityTypeKey: EntityTypeKey[FileCommand] = EntityTypeKey[FileCommand]("FileActor")
   val MaxNumberOfShards = 1000
 
-  def shardingBehavior(shard: ActorRef[ClusterSharding.ShardCommand], entityId: String): Behavior[FileCommand] = {
+  override def shardingCluster(clusterName: String, config: Config): ClusterSharding = {
+    val system = ActorSystem(Behaviors.empty[FileCommand], clusterName, config)
+    val sharding = ClusterSharding(system)
+    Cluster(system).manager ! Join(Cluster(system).selfMember.address)
+    sharding.init(
+      Entity(
+        typeKey = entityTypeKey,
+        createBehavior = entityContext => shardingBehavior(entityContext.shard, entityContext.entityId))
+        .withStopMessage(PassivateFileCommand))
+    sharding
+  }
+
+  override def shardingBehavior(shard: ActorRef[ClusterSharding.ShardCommand], entityId: String): Behavior[FileCommand] = {
     Behaviors.setup { context =>
       def behavior: Behavior[FileCommand] =
           EventSourcedEntity[FileCommand, FileEvent, FileState](
@@ -70,13 +89,7 @@ object FileActor {
             emptyState = InitState(entityId),
             commandHandler(context, shard),
             eventHandler(context))
-//          EventSourcedBehavior[FileCommand, FileEvent, FileState](
-//            persistenceId = PersistenceId(s"FileActor-$entityId"),
-//            emptyState = InitState(entityId),
-//            commandHandler(context, shard),
-//            eventHandler(context))
-
-      context.setReceiveTimeout(30.seconds, IdleCommand)
+      context.setReceiveTimeout(30.seconds, IdleFileCommand)
       behavior
     }
   }
@@ -85,54 +98,37 @@ object FileActor {
     state match {
       case InitState(fileId) =>
         command match {
-          case cmd @ UploadInProgressCommand(byteString, replyTo) => uploadFile(context, UploadFile(fileId, byteString), cmd, replyTo)
-          case IdleCommand => {
-            shard ! ClusterSharding.Passivate(context.self)
-            Effect.none
-          }
-          case PassivateCommand => {
-            Effect.stop()
-          }
+          case UploadInProgressCommand(byteString, replyTo) => uploadFile(UploadFile(fileId, byteString), replyTo)
+          case IdleFileCommand => ActorSharding.passivateCluster(context, shard)
+          case PassivateFileCommand => ActorSharding.passivateActor
           case _ => Effect.unhandled
         }
       case inProgressState @ InProgressState(file) =>
         command match {
-          case cmd @ UploadInProgressCommand(byteString, replyTo) => {
-            uploadFile(context, UploadFile(file.fileId, byteString), cmd, replyTo)
-          }
-          case UploadedFileCommand(replyTo) => uploadedFile(context, inProgressState, replyTo)
-          case IdleCommand => {
-            shard ! ClusterSharding.Passivate(context.self)
-            Effect.none
-          }
-          case PassivateCommand => {
-            Effect.stop()
-          }
+          case UploadInProgressCommand(byteString, replyTo) => uploadFile(UploadFile(file.fileId, byteString), replyTo)
+          case UploadedFileCommand(replyTo) => uploadedFile(inProgressState, replyTo)
+          case IdleFileCommand => ActorSharding.passivateCluster(context, shard)
+          case PassivateFileCommand => ActorSharding.passivateActor
           case _ => Effect.unhandled
         }
       case FinishState(_) =>
         command match {
-          case IdleCommand => {
-            shard ! ClusterSharding.Passivate(context.self)
-            Effect.none
-          }
-          case PassivateCommand => {
-            Effect.stop()
-          }
+          case IdleFileCommand => ActorSharding.passivateCluster(context, shard)
+          case PassivateFileCommand => ActorSharding.passivateActor
           case _ => Effect.unhandled
         }
       case _ => Effect.unhandled
     }
   }
 
-  private def uploadFile(context: ActorContext[FileCommand], file: UploadFile, cmd: UploadInProgressCommand, replyTo: ActorRef[UploadFile]): Effect[FileEvent, FileState] = {
+  private def uploadFile(file: UploadFile, replyTo: ActorRef[UploadFile]): Effect[FileEvent, FileState] = {
     val evt = UploadEvent(file.fileId, file)
     Effect.persist(evt).thenRun { _ =>
       replyTo ! file
     }
   }
 
-  private def uploadedFile(context: ActorContext[FileCommand], state: InProgressState, replyTo: ActorRef[UploadedFile]): Effect[FileEvent, FileState] = {
+  private def uploadedFile(state: InProgressState, replyTo: ActorRef[UploadedFile]): Effect[FileEvent, FileState] = {
     val evt = UploadedEvent(state.fileId)
     Effect.persist(evt).thenRun { _ =>
       val tmp = Paths.get("/tmp/" + state.file.fileId)

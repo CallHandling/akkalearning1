@@ -5,7 +5,13 @@ import java.io.NotSerializableException
 import akka.actor.typed.ActorRefResolver
 import akka.actor.typed.javadsl.Adapter
 import akka.serialization.{BaseSerializer, SerializerWithStringManifest}
-import com.callhandling.typed.persistence.protobuf.FileActorMessage
+import com.callhandling.typed.persistence.protobuf.FileActorProto
+
+//import FileActorMessage._
+//import FileActorMessage.Command._
+//import FileActorMessage.Event._
+//import FileActorMessage.State._
+//import FileActorMessage.Response._
 
 class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends SerializerWithStringManifest with BaseSerializer {
 
@@ -65,8 +71,8 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
     multimediaFileInfoToProto(a).build().toByteArray
   }
 
-  private def multimediaFileInfoToProto(a: MultimediaFileInfo): FileActorMessage.MultimediaFileInfo.Builder  = {
-    val builder = FileActorMessage.MultimediaFileInfo.newBuilder()
+  private def multimediaFileInfoToProto(a: MultimediaFileInfo): FileActorProto.MultimediaFileInfo.Builder  = {
+    val builder = FileActorProto.MultimediaFileInfo.newBuilder()
     builder.setFormat(a.format).setDuration(a.duration)
     a.audio.map(o => builder.setAudio(audioFileInfoToProto(o)))
     a.video.map(o => builder.setVideo(videoFileInfoToProto(o)))
@@ -77,8 +83,8 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
     audioFileInfoToProto(a).build().toByteArray
   }
 
-  private def audioFileInfoToProto(a: AudioFileInfo): FileActorMessage.AudioFileInfo.Builder  = {
-    val builder = FileActorMessage.AudioFileInfo.newBuilder()
+  private def audioFileInfoToProto(a: AudioFileInfo): FileActorProto.AudioFileInfo.Builder  = {
+    val builder = FileActorProto.AudioFileInfo.newBuilder()
     builder.setDecoder(a.decoder).setSamplingRate(a.samplingRate)
     builder.setChannels(a.channels).setBitRate(a.bitRate)
     builder
@@ -88,8 +94,8 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
     videoFileInfoToProto(a).build().toByteArray
   }
 
-  private def videoFileInfoToProto(a: VideoFileInfo): FileActorMessage.VideoFileInfo.Builder  = {
-    val builder = FileActorMessage.VideoFileInfo.newBuilder()
+  private def videoFileInfoToProto(a: VideoFileInfo): FileActorProto.VideoFileInfo.Builder  = {
+    val builder = FileActorProto.VideoFileInfo.newBuilder()
     builder.setDecoder(a.decoder)
     a.dimension.map(d => builder.setDimension(videoDimensionToProto(d)))
     builder.setBitRate(a.bitRate).setFrameRate(a.frameRate)
@@ -100,25 +106,25 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
     videoDimensionToProto(a).build().toByteArray
   }
 
-  private def videoDimensionToProto(a: VideoDimension): FileActorMessage.VideoDimension.Builder  = {
-    val builder = FileActorMessage.VideoDimension.newBuilder()
+  private def videoDimensionToProto(a: VideoDimension): FileActorProto.VideoDimension.Builder  = {
+    val builder = FileActorProto.VideoDimension.newBuilder()
     builder.setWidth(a.width).setHeight(a.height)
     builder
   }
 
   private def initStateToBinary(a: InitState): Array[Byte] = {
-    val builder = FileActorMessage.InitState.newBuilder()
+    val builder = FileActorProto.InitState.newBuilder()
         .setFileId(a.fileId)
     builder.build().toByteArray()
   }
 
   private def inProgressStateToBinary(a: InProgressState): Array[Byte] = {
-    val builder = FileActorMessage.InProgressState.newBuilder()
+    val builder = FileActorProto.InProgressState.newBuilder()
     builder.setFile(uploadFileToProto(a.file)).build().toByteArray
   }
 
   private def finishStateToBinary(a: FinishState): Array[Byte] = {
-    val builder = FileActorMessage.FinishState.newBuilder()
+    val builder = FileActorProto.FinishState.newBuilder()
     builder.setFile(uploadFileToProto(a.file))
     builder.build().toByteArray()
   }
@@ -127,40 +133,40 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
     uploadFileToProto(a).build().toByteArray
   }
 
-  private def uploadFileToProto(a: UploadFile): FileActorMessage.UploadFile.Builder  = {
-    val builder = FileActorMessage.UploadFile.newBuilder()
+  private def uploadFileToProto(a: UploadFile): FileActorProto.UploadFile.Builder  = {
+    val builder = FileActorProto.UploadFile.newBuilder()
     builder.setFileId(a.fileId).setByteString(a.byteString)
     builder
   }
 
   private def uploadInProgressCommandToBinary(a: UploadInProgressCommand): Array[Byte] = {
-    val builder = FileActorMessage.UploadInProgressCommand.newBuilder()
+    val builder = FileActorProto.UploadInProgressCommand.newBuilder()
     builder.setByteString(a.byteString)
     builder.setReplyTo(resolver.toSerializationFormat(a.replyTo))
     builder.build().toByteArray()
   }
 
   private def uploadedFileBinary(a: UploadedFile): Array[Byte] = {
-    val builder = FileActorMessage.UploadedFile.newBuilder()
+    val builder = FileActorProto.UploadedFile.newBuilder()
     builder.setFileId(a.fileId).setByteString(a.byteString)
     a.multimediaFileInfo.map(o => builder.setFileInfo(multimediaFileInfoToProto(o)))
     builder.build().toByteArray()
   }
 
   private def uploadedFileCommandToBinary(a: UploadedFileCommand): Array[Byte] = {
-    val builder = FileActorMessage.UploadedFileCommand.newBuilder()
+    val builder = FileActorProto.UploadedFileCommand.newBuilder()
     builder.setReplyTo(resolver.toSerializationFormat(a.replyTo))
     builder.build().toByteArray()
   }
 
   private def uploadEventToBinary(a: UploadEvent): Array[Byte] = {
-    val builder = FileActorMessage.UploadEvent.newBuilder()
+    val builder = FileActorProto.UploadEvent.newBuilder()
     builder.setFileId(a.fileId).setFile(uploadFileToProto(a.file))
     builder.build().toByteArray()
   }
 
   private def uploadedEventToBinary(a: UploadedEvent): Array[Byte] = {
-    val builder = FileActorMessage.UploadedEvent.newBuilder()
+    val builder = FileActorProto.UploadedEvent.newBuilder()
     builder.setFileId(a.fileId)
     builder.build().toByteArray()
   }
@@ -181,46 +187,46 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
   }
 
   private def initStateFromBinary(bytes: Array[Byte]): InitState = {
-    val a = FileActorMessage.InitState.parseFrom(bytes)
+    val a = FileActorProto.InitState.parseFrom(bytes)
     InitState(a.getFileId)
   }
 
   private def inProgressStateFromBinary(bytes: Array[Byte]): InProgressState = {
-    val a = FileActorMessage.InProgressState.parseFrom(bytes)
+    val a = FileActorProto.InProgressState.parseFrom(bytes)
     InProgressState(UploadFile(a.getFile.getFileId, a.getFile.getByteString))
   }
 
   private def finishStateFromBinary(bytes: Array[Byte]): FinishState = {
-    val a = FileActorMessage.FinishState.parseFrom(bytes)
+    val a = FileActorProto.FinishState.parseFrom(bytes)
     FinishState(UploadFile(a.getFile.getFileId, a.getFile.getByteString))
   }
 
   private def uploadFileFromBinary(bytes: Array[Byte]): UploadFile = {
-    val a = FileActorMessage.UploadFile.parseFrom(bytes)
+    val a = FileActorProto.UploadFile.parseFrom(bytes)
     UploadFile(a.getFileId, a.getByteString)
   }
 
   private def uploadInProgressCommandFromBinary(bytes: Array[Byte]): UploadInProgressCommand = {
-    val a = FileActorMessage.UploadInProgressCommand.parseFrom(bytes)
+    val a = FileActorProto.UploadInProgressCommand.parseFrom(bytes)
     UploadInProgressCommand(a.getByteString, resolver.resolveActorRef(a.getReplyTo))
   }
 
-  private def getVideoDimension(a: FileActorMessage.VideoDimension): Option[VideoDimension] = {
+  private def getVideoDimension(a: FileActorProto.VideoDimension): Option[VideoDimension] = {
     Some(VideoDimension(a.getWidth, a.getHeight))
   }
 
-  private def getVideoFileInfo(a: FileActorMessage.VideoFileInfo): Option[VideoFileInfo] = {
+  private def getVideoFileInfo(a: FileActorProto.VideoFileInfo): Option[VideoFileInfo] = {
     val dimension = if(a.hasDimension) {
       getVideoDimension(a.getDimension)
     } else None
     Some(VideoFileInfo(a.getDecoder, dimension, a.getBitRate, a.getFrameRate))
   }
 
-  private def getAudioFileInfo(a: FileActorMessage.AudioFileInfo): Option[AudioFileInfo] = {
+  private def getAudioFileInfo(a: FileActorProto.AudioFileInfo): Option[AudioFileInfo] = {
     Some(AudioFileInfo(a.getDecoder, a.getSamplingRate, a.getChannels, a.getBitRate))
   }
 
-  private def getMultimediaFileInfo(a: FileActorMessage.MultimediaFileInfo): Option[MultimediaFileInfo] = {
+  private def getMultimediaFileInfo(a: FileActorProto.MultimediaFileInfo): Option[MultimediaFileInfo] = {
     val audio = if(a.hasAudio) {
       getAudioFileInfo(a.getAudio)
     } else None
@@ -231,7 +237,7 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
   }
 
   private def uploadedFileFromBinary(bytes: Array[Byte]): UploadedFile = {
-    val a = FileActorMessage.UploadedFile.parseFrom(bytes)
+    val a = FileActorProto.UploadedFile.parseFrom(bytes)
     val fileInfo = if(a.hasFileInfo) {
       getMultimediaFileInfo(a.getFileInfo)
     } else None
@@ -239,17 +245,17 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
   }
 
   private def uploadedFileCommandFromBinary(bytes: Array[Byte]): UploadedFileCommand = {
-    val a = FileActorMessage.UploadedFileCommand.parseFrom(bytes)
+    val a = FileActorProto.UploadedFileCommand.parseFrom(bytes)
     UploadedFileCommand(resolver.resolveActorRef(a.getReplyTo))
   }
 
   private def uploadEventFromBinary(bytes: Array[Byte]): UploadEvent = {
-    val a = FileActorMessage.UploadEvent.parseFrom(bytes)
+    val a = FileActorProto.UploadEvent.parseFrom(bytes)
     UploadEvent(a.getFileId, UploadFile(a.getFile.getFileId, a.getFile.getByteString))
   }
 
   private def uploadedEventFromBinary(bytes: Array[Byte]): UploadedEvent = {
-    val a = FileActorMessage.UploadedEvent.parseFrom(bytes)
+    val a = FileActorProto.UploadedEvent.parseFrom(bytes)
     UploadedEvent(a.getFileId)
   }
 
