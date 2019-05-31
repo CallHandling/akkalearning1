@@ -1,6 +1,6 @@
 package com.callhandling
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http

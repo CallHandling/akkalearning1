@@ -5,7 +5,6 @@ import java.io.ByteArrayInputStream
 import akka.actor.{Actor, ActorLogging}
 import akka.util.ByteString
 import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, SetStreamInfo}
-import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.{Converter, StreamDetails}
 
 object StreamActor {
