@@ -2,48 +2,38 @@ package com.callhandling.actors
 
 import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
-import akka.util.ByteString
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.actors.StreamActor.{Ack, StreamCompleted, StreamFailure, StreamInitialized}
+import com.callhandling.actors.StreamActor.StreamInitialized
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.{Converter, StreamDetails}
+import com.callhandling.media.StreamDetails
 
 object FileActor {
   def props: Props = Props[FileActor]
 
+  // States
   sealed trait State
-
   case object Idle extends State
-
   case object Uploading extends State
-
   case object UploadDone extends State
 
-  // events
+  // Events
   case object SetUpStream
-
   final case class SetDetails(id: String, details: Details)
-
   final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
-
   case object GetFileData
-
   case object ConvertFile
-
   final case class EntityMessage(id: String, message: Any)
 
   sealed trait Data
-
   case object EmptyData extends Data
-
   final case class Details(filename: String, description: String) extends Data
 
   final case class FileData(
-                             fileId: String,
-                             details: Details,
-                             streams: List[StreamDetails],
-                             outputFormats: List[Format],
-                             streamActor: ActorRef) extends Data
+       fileId: String,
+       details: Details,
+       streams: List[StreamDetails],
+       outputFormats: List[Format],
+       streamActor: ActorRef) extends Data
 
   val NumberOfShards = 50
 
@@ -52,8 +42,7 @@ object FileActor {
     entityProps = Props[FileActor],
     settings = ClusterShardingSettings(system),
     extractEntityId = extractEntityId,
-    extractShardId = extractShardId
-  )
+    extractShardId = extractShardId)
 
   val extractEntityId: ShardRegion.ExtractEntityId = {
     case EntityMessage(id, message) => (id, message)
@@ -65,15 +54,14 @@ object FileActor {
 }
 
 class FileActor extends FSM[State, Data] with Stash with ActorLogging {
-
   import FileActor._
 
   startWith(Idle, EmptyData)
 
   when(Idle) {
     case Event(SetUpStream, _) =>
-      log.info("Receive command from {}", sender())
-      sender() ! context.actorOf(Props[StreamActor])
+      val actorRef = context.actorOf(Props[StreamActor])
+      sender() ! actorRef
       stay
     case Event(StreamInitialized, _) =>
       goto(Uploading)
@@ -98,6 +86,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(SetDetails(id, details), EmptyData) =>
       stay.using(FileData(id, details, Nil, Nil, ActorRef.noSender))
     case Event(GetFileData, _) =>
+      log.info("Data not ready for retrieval. Stashing the request for now.")
       stash()
       stay
   }

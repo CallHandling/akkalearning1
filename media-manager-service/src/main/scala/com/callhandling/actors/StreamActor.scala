@@ -1,9 +1,8 @@
 package com.callhandling.actors
 
-import akka.actor.{Actor, ActorLogging, Props}
+import akka.actor.{Actor, ActorLogging}
 import akka.util.ByteString
-import com.callhandling.actors.FileActor.{SetStreamInfo, State, UploadDone}
-import com.callhandling.actors.StreamActor.StreamInitialized
+import com.callhandling.actors.FileActor.SetStreamInfo
 import com.callhandling.media.{Converter, StreamDetails}
 
 object StreamActor {
@@ -19,12 +18,13 @@ class StreamActor extends Actor with ActorLogging {
 
   def receive(stream: ByteString): Receive = {
     case StreamInitialized =>
-      sender() ! Ack
+      log.info("Stream Initialized")
       context.parent ! StreamInitialized
+      sender() ! Ack
     case data: ByteString =>
       log.info("Received element: {}", data)
-      sender() ! Ack
       context.become(receive(stream ++ data), discardOld = true)
+      sender() ! Ack
     case StreamCompleted =>
       log.info("Stream completed.")
 

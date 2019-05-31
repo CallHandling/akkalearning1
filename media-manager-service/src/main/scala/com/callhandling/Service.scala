@@ -14,7 +14,6 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import com.callhandling.actors.FileActor
-import com.callhandling.actors.FileActor.{Details, EntityMessage, FileData, GetFileData, SetDetails}
 import com.callhandling.actors.StreamActor.{Ack, StreamCompleted, StreamFailure, StreamInitialized}
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
@@ -27,12 +26,12 @@ import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 object Service {
-
-  final case class UploadResult(fileId: String,
-                                filename: String,
-                                description: String,
-                                streams: List[StreamDetails],
-                                outputFormats: List[Format])
+  final case class UploadResult(
+      fileId: String,
+      filename: String,
+      description: String,
+      streams: List[StreamDetails],
+      outputFormats: List[Format])
 
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
     type RJF[A] = RootJsonFormat[A]
@@ -53,25 +52,31 @@ object Service {
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
   }
 
-  def apply(fileManagerRegion: ActorRef)(implicit system: ActorSystem, materializer: ActorMaterializer, timeout: Timeout) = new Service(fileManagerRegion)
+  def apply(fileManagerRegion: ActorRef)(
+      implicit system: ActorSystem,
+      materializer: ActorMaterializer,
+      timeout: Timeout) =
+    new Service(fileManagerRegion)
 }
 
-class Service(fileManagerRegion: ActorRef)(implicit system: ActorSystem, materializer: ActorMaterializer, timeout: Timeout) {
-
+class Service(fileManagerRegion: ActorRef)(
+    implicit system: ActorSystem,
+    materializer: ActorMaterializer,
+    timeout: Timeout) {
+  import FileActor._
   import Service._
   import JsonSupport._
-  import FileActor._
 
-  implicit val ec = system.dispatcher
+  implicit val ec: ExecutionContextExecutor = system.dispatcher
 
   def uploadRoute = path("fileUpload") {
     post {
       val fileId = java.util.UUID.randomUUID().toString
-      val fileActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
-      val fileActor = Await.result(fileActorF, timeout.duration).asInstanceOf[ActorRef]
+      val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
+      val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
 
       lazy val fileSink = Sink.actorRefWithAck(
-        fileActor,
+        streamActor,
         onInitMessage = StreamInitialized,
         ackMessage = Ack,
         onCompleteMessage = StreamCompleted,
@@ -80,9 +85,7 @@ class Service(fileManagerRegion: ActorRef)(implicit system: ActorSystem, materia
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
           case part: BodyPart if part.filename.isDefined && part.name == "file" =>
-            part.entity.dataBytes.mapAsync(1) { data =>
-              Future.successful((fileId, data))
-            }.runWith(fileSink)
+            part.entity.dataBytes.runWith(fileSink)
             Future.successful("filename" -> part.filename.get)
           case part: BodyPart if part.name == "description" =>
             part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
@@ -95,7 +98,6 @@ class Service(fileManagerRegion: ActorRef)(implicit system: ActorSystem, materia
               details = Details(
                 filename = details("filename"),
                 description = details("description"))))
-
           val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
           onSuccess(fileDataF) {
             case FileData(id, Details(filename, description), streams, outputFormats, _) =>
@@ -116,10 +118,10 @@ class Service(fileManagerRegion: ActorRef)(implicit system: ActorSystem, materia
 
   def restart(): Unit = {
     val route = uploadRoute
+    val port = 8080
+    val bindingFuture = Http().bindAndHandle(uploadRoute, "localhost", port)
 
-    val bindingFuture = Http().bindAndHandle(uploadRoute, "localhost", 8089)
-
-    println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
+    println(s"Server online at http://localhost:$port/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
     bindingFuture
       .flatMap(_.unbind()) // trigger unbinding from the port
