@@ -1,8 +1,11 @@
 package com.callhandling.actors
 
+import java.io.ByteArrayInputStream
+
 import akka.actor.{Actor, ActorLogging}
 import akka.util.ByteString
-import com.callhandling.actors.FileActor.SetStreamInfo
+import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, SetStreamInfo}
+import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.{Converter, StreamDetails}
 
 object StreamActor {
@@ -33,6 +36,10 @@ class StreamActor extends Actor with ActorLogging {
 
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
+
+    case ConvertFile(outputDetails) =>
+      sender() ! ConversionStarted(FileActor.generateId)
+      Converter.convertFile(new ByteArrayInputStream(stream.toArray))
   }
 
   def receive: Receive = receive(ByteString.empty)

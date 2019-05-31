@@ -1,8 +1,9 @@
 package com.callhandling.media
 
+import java.io.InputStream
 import java.nio.file.Path
 
-import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, UrlOutput}
+import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeInput, UrlOutput}
 import org.apache.tika.Tika
 
 object Converter {
@@ -22,9 +23,10 @@ object Converter {
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def convertFile(inputPath: Path): OutputDetails => Path = {
+  def convertFile(inputStream: InputStream): OutputDetails => Path = {
     case OutputDetails(outputPath, format) =>
-      val result = FFmpeg.atPath(inputPath)
+      FFmpeg.atPath(FFmpegConf.Bin)
+        .addInput(PipeInput.pumpFrom(inputStream))
         .addOutput(UrlOutput.toPath(outputPath)
           .setFormat(format))
         .execute()

@@ -1,5 +1,7 @@
 package com.callhandling
 
+import java.nio.file.{Path, Paths}
+
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
@@ -15,6 +17,7 @@ import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import com.callhandling.actors.FileActor
 import com.callhandling.actors.StreamActor.{Ack, StreamCompleted, StreamFailure, StreamInitialized}
+import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
@@ -33,6 +36,8 @@ object Service {
       streams: List[StreamDetails],
       outputFormats: List[Format])
 
+  final case class ConversionResult(message: String, fileId: String)
+
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
     type RJF[A] = RootJsonFormat[A]
 
@@ -49,7 +54,9 @@ object Service {
     implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
     implicit val streamDetailsFormat: RJF[StreamDetails] = jsonFormat21(StreamDetails.apply)
     implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
+
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
+    implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat2(ConversionResult)
   }
 
   def apply(fileManagerRegion: ActorRef)(
@@ -71,7 +78,7 @@ class Service(fileManagerRegion: ActorRef)(
 
   def uploadRoute = path("fileUpload") {
     post {
-      val fileId = java.util.UUID.randomUUID().toString
+      val fileId = FileActor.generateId
       val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
       val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
 
@@ -100,7 +107,7 @@ class Service(fileManagerRegion: ActorRef)(
                 description = details("description"))))
           val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
           onSuccess(fileDataF) {
-            case FileData(id, Details(filename, description), streams, outputFormats) =>
+            case FileData(id, Details(filename, description), streams, outputFormats, _) =>
               complete(UploadResult(id, filename, description, streams, outputFormats))
             case _ => complete(HttpResponse(InternalServerError, entity = "Could not retrieve file data"))
           }
@@ -109,17 +116,25 @@ class Service(fileManagerRegion: ActorRef)(
     }
   }
 
-  /*
   def convertRoute = path("convertFile") {
-    formFields('fileId, 'format.as[Format]) { (fieldId, format) =>
+    post {
+      formFields('fileId, 'format) { (fileId, format) =>
+        val homeDir = System.getProperty("user.home")
+        val outputPath = Paths.get(s"$homeDir/$fileId/$format")
+        val outputDetails = OutputDetails(outputPath, format)
+        val conversionF = fileManagerRegion ? EntityMessage(fileId, ConvertFile(outputDetails))
 
+        onSuccess(conversionF) {
+          case ConversionStarted(newFileId) => complete(ConversionResult("Conversion Started", newFileId))
+        }
+      }
     }
-  }*/
+  }
 
   def restart(): Unit = {
-    val route = uploadRoute
+    val route = uploadRoute ~ convertRoute
     val port = 8080
-    val bindingFuture = Http().bindAndHandle(uploadRoute, "localhost", port)
+    val bindingFuture = Http().bindAndHandle(route, "localhost", port)
 
     println(s"Server online at http://localhost:$port/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return

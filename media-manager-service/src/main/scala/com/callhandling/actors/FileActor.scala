@@ -4,11 +4,14 @@ import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
+import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
 
 object FileActor {
   def props: Props = Props[FileActor]
+
+  def generateId: String = java.util.UUID.randomUUID().toString
 
   // States
   sealed trait State
@@ -21,18 +24,21 @@ object FileActor {
   final case class SetDetails(id: String, details: Details)
   final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
   case object GetFileData
-  case object ConvertFile
   final case class EntityMessage(id: String, message: Any)
 
-  sealed trait Data
-  case object EmptyData extends Data
-  final case class Details(filename: String, description: String) extends Data
+  // Conversion Messages
+  final case class ConvertFile(outputDetails: OutputDetails)
+  final case class ConversionStarted(fileId: String)
 
+  // Data
+  sealed trait Data
+  final case class Details(filename: String, description: String) extends Data
   final case class FileData(
-       fileId: String,
+       id: String,
        details: Details,
        streams: List[StreamDetails],
-       outputFormats: List[Format]) extends Data
+       outputFormats: List[Format],
+      streamRef: ActorRef) extends Data
 
   val NumberOfShards = 50
 
@@ -55,13 +61,13 @@ object FileActor {
 class FileActor extends FSM[State, Data] with Stash with ActorLogging {
   import FileActor._
 
-  startWith(Idle, EmptyData)
+  startWith(Idle, FileData("", Details("", ""), Nil, Nil, ActorRef.noSender))
 
   when(Idle) {
-    case Event(SetUpStream, _) =>
-      val actorRef = context.actorOf(Props[StreamActor])
-      sender() ! actorRef
-      stay
+    case Event(SetUpStream, fileData: FileData) =>
+      val streamRef = context.actorOf(Props[StreamActor])
+      sender() ! streamRef
+      stay.using(fileData.copy(streamRef = streamRef))
     case Event(StreamInitialized, _) =>
       goto(Uploading)
   }
@@ -76,14 +82,15 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
   when(UploadDone) {
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
-      goto(Idle)
+      stay
+    case Event(msg: ConvertFile, fileData: FileData) =>
+      fileData.streamRef forward msg
+      stay
   }
 
   whenUnhandled {
-    case Event(SetDetails(_, details), fileData: FileData) =>
-      stay.using(fileData.copy(details = details))
-    case Event(SetDetails(id, details), EmptyData) =>
-      stay.using(FileData(id, details, Nil, Nil))
+    case Event(SetDetails(id, details), fileData: FileData) =>
+      stay.using(fileData.copy(id = id, details = details))
     case Event(GetFileData, _) =>
       log.info("Data not ready for retrieval. Stashing the request for now.")
       stash()
