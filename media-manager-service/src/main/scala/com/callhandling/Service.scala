@@ -100,7 +100,7 @@ class Service(fileManagerRegion: ActorRef)(
                 description = details("description"))))
           val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
           onSuccess(fileDataF) {
-            case FileData(id, Details(filename, description), streams, outputFormats, _) =>
+            case FileData(id, Details(filename, description), streams, outputFormats) =>
               complete(UploadResult(id, filename, description, streams, outputFormats))
             case _ => complete(HttpResponse(InternalServerError, entity = "Could not retrieve file data"))
           }

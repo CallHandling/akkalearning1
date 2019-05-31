@@ -32,8 +32,7 @@ object FileActor {
        fileId: String,
        details: Details,
        streams: List[StreamDetails],
-       outputFormats: List[Format],
-       streamActor: ActorRef) extends Data
+       outputFormats: List[Format]) extends Data
 
   val NumberOfShards = 50
 
@@ -84,7 +83,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(SetDetails(_, details), fileData: FileData) =>
       stay.using(fileData.copy(details = details))
     case Event(SetDetails(id, details), EmptyData) =>
-      stay.using(FileData(id, details, Nil, Nil, ActorRef.noSender))
+      stay.using(FileData(id, details, Nil, Nil))
     case Event(GetFileData, _) =>
       log.info("Data not ready for retrieval. Stashing the request for now.")
       stash()
