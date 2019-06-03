@@ -36,9 +36,10 @@ class StreamActor extends Actor with ActorLogging {
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
 
-    case ConvertFile(outputDetails) =>
+    case ConvertFile(fileId, outputDetails) =>
+      log.info("Converting file...")
       sender() ! ConversionStarted(FileActor.generateId)
-      Converter.convertFile(new ByteArrayInputStream(stream.toArray))
+      Converter.convertFile(fileId, new ByteArrayInputStream(stream.toArray))(outputDetails)
   }
 
   def receive: Receive = receive(ByteString.empty)

@@ -1,13 +1,13 @@
 package com.callhandling.media
 
 import java.io.InputStream
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 
-import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeInput, UrlOutput}
+import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, FFmpegProgress, PipeInput, ProgressListener, UrlOutput}
 import org.apache.tika.Tika
 
 object Converter {
-  case class OutputDetails(outputPath: Path, format: String)
+  case class OutputDetails(filename: String, format: String)
 
   def getOutputFormats(data: Array[Byte]) = {
     val mimeType = mimeTypeOf(data)
@@ -23,14 +23,16 @@ object Converter {
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def convertFile(inputStream: InputStream): OutputDetails => Path = {
-    case OutputDetails(outputPath, format) =>
+  def convertFile(fileId: String, inputStream: InputStream): OutputDetails => Unit = {
+    case OutputDetails(_, format) =>
+      val homeDir = System.getProperty("user.home")
+      val outputPath = Paths.get(s"$homeDir/$fileId/$format")
+
       FFmpeg.atPath(FFmpegConf.Bin)
         .addInput(PipeInput.pumpFrom(inputStream))
         .addOutput(UrlOutput.toPath(outputPath)
           .setFormat(format))
         .execute()
-      outputPath
   }
 }
 
