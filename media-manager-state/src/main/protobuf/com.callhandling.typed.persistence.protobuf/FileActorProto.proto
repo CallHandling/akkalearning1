@@ -60,10 +60,6 @@ message UploadInProgressCommand {
     string replyTo = 2;
 }
 
-message UploadDone {
-    string fileId = 1;
-}
-
 message UploadedFileCommand {
     string replyTo = 1;
 }

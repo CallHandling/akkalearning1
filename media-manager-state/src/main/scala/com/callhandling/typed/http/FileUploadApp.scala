@@ -2,8 +2,7 @@ package com.callhandling.typed.http
 
 import java.nio.file.Paths
 
-import akka.NotUsed
-import akka.actor.typed.{ActorSystem, Behavior, Terminated}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Terminated}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
@@ -11,11 +10,15 @@ import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.stream.scaladsl.FileIO
 import akka.stream.typed.scaladsl.{ActorMaterializer, ActorSink}
+import akka.util.Timeout
 import com.callhandling.typed.cluster.ActorSharding
-import com.callhandling.typed.persistence.{FileActor, FileActorSink, FileListActor}
+import com.callhandling.typed.ffprobe.JsonUtil
+import com.callhandling.typed.persistence.{AddFile, FileActor, FileActorSink, FileListActor, FileListResponse, GetFileListCommand, ReturnFile}
 
 import scala.io.StdIn
 import scala.util.{Failure, Success}
+import scala.concurrent.duration._
+
 
 object FileUploadApp {
 
@@ -24,16 +27,23 @@ object FileUploadApp {
     system.whenTerminated
   }
 
-  val mainBehavior: Behavior[NotUsed] =
+  trait Protocol
+  private final case class WrappedFileListResponse(response: FileListResponse) extends Protocol
+
+  val mainBehavior: Behavior[Protocol] =
     Behaviors.setup {
       context =>
         implicit val system = context.system
         implicit val systemUntyped = akka.actor.ActorSystem("ActorUntyped") //Adapter.toUntyped(system)
         implicit val materializer: ActorMaterializer = ActorMaterializer()(system)
         implicit val executionContext = system.executionContext
+        implicit val timeout: Timeout = 3.seconds
 
         val fileActorSharding = ActorSharding(FileActor, 3)
         val fileListActorSharding = ActorSharding(FileListActor, 3)
+        val fileListActorEntityRef = fileListActorSharding.entityRefFor(FileListActor.entityTypeKey, ActorSharding.generateEntityId)
+
+        val replyToFileListActor: ActorRef[FileListResponse] = context.messageAdapter(response => WrappedFileListResponse(response))
 
         val route = //uploadFileTest(systemUntyped)
           withoutSizeLimit {
@@ -42,8 +52,8 @@ object FileUploadApp {
                 fileUpload("file") {
                   case (fileInfo, fileStream) =>
 
-                    val fileActorEntityRef = fileActorSharding.entityRefFor(FileActor.entityTypeKey, ActorSharding.generateEntityId)
-                    val fileListActorEntityRef = fileListActorSharding.entityRefFor(FileListActor.entityTypeKey, ActorSharding.generateEntityId)
+                    val fileId = ActorSharding.generateEntityId;
+                    val fileActorEntityRef = fileActorSharding.entityRefFor(FileActor.entityTypeKey, fileId)
                     val fileActorSinkRef = context.spawn(FileActorSink(fileActorEntityRef, fileListActorEntityRef).main, ActorSharding.generateEntityId)
 
                     def fileSink = ActorSink.actorRefWithAck(
@@ -69,6 +79,24 @@ object FileUploadApp {
           .flatMap(_.unbind()) // trigger unbinding from the port
           .onComplete(_ => system.terminate()) // and shutdown when done
 
+        Behaviors.receiveMessage[Protocol] {
+          case wrapped: WrappedFileListResponse => {
+            wrapped.response match {
+              case AddFile(fileId) =>
+                context.log.info("111Added file to FileListActor:")
+                context.log.info("111fileId: " + fileId)
+                Behaviors.same
+              case ReturnFile(fileId, uploadedFile) =>
+                context.log.info("111Retrieve file from FileListActor:")
+                context.log.info("111fileId: " + fileId)
+                context.log.info("111uploadedFile mediaInfo: "+ uploadedFile.map(a => JsonUtil.toJson(a.multimediaFileInfo)))
+                Behaviors.same
+              case response@_ =>
+                context.log.info("unhandled command"+ response)
+                Behaviors.same
+            }
+          }
+        }
         Behaviors.receiveSignal {
           case (_, Terminated(_)) =>
             Behaviors.stopped

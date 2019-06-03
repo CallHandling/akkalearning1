@@ -7,11 +7,6 @@ import akka.util.ByteString
 import com.callhandling.typed.ffprobe.JsonUtil
 import com.callhandling.typed.persistence.FileActorSink.{WrappedFileListResponse, WrappedFileResponse}
 
-//import FileActorMessage._
-//import FileActorMessage.Command._
-//import FileActorMessage.Event._
-//import FileActorMessage.State._
-//import FileActorMessage.Response._
 
 object FileActorSink {
   trait Ack
@@ -25,6 +20,7 @@ object FileActorSink {
   private final case class WrappedFileResponse(response: FileResponse) extends Protocol
   private final case class WrappedFileListResponse(response: FileListResponse) extends Protocol
 }
+
 
 case class FileActorSink(fileActorEntityRef: EntityRef[FileCommand], fileListActorEntityRef: EntityRef[FileListCommand]) {
 
@@ -45,7 +41,7 @@ case class FileActorSink(fileActorEntityRef: EntityRef[FileCommand], fileListAct
         }
         case FileActorSink.Complete => {
           fileActorEntityRef ! UploadedFileCommand(replyToFileActor)
-          fileActorEntityRef ! IdleFileCommand
+          fileActorEntityRef ! PassivateFileCommand
           Behaviors.same
         }
         case FileActorSink.Fail(ex) => {
@@ -75,7 +71,7 @@ case class FileActorSink(fileActorEntityRef: EntityRef[FileCommand], fileListAct
               context.log.info("Added file to FileListActor:")
               context.log.info("fileId: " + fileId)
               Behaviors.same
-            case GetFile(fileId, uploadedFile) =>
+            case ReturnFile(fileId, uploadedFile) =>
               context.log.info("Retrieve file from FileListActor:")
               context.log.info("fileId: " + fileId)
               context.log.info("uploadedFile mediaInfo: "+ uploadedFile.map(a => JsonUtil.toJson(a.multimediaFileInfo)))
