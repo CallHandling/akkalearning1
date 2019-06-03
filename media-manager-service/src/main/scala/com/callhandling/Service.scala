@@ -1,16 +1,12 @@
 package com.callhandling
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
 import akka.http.scaladsl.model.{HttpResponse, Multipart}
-import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.directives.FutureDirectives.onSuccess
-import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
@@ -18,15 +14,18 @@ import akka.util.Timeout
 import com.callhandling.actors.FileActor
 import com.callhandling.actors.StreamActor.{Ack, StreamCompleted, StreamFailure, StreamInitialized}
 import com.callhandling.media.Converter.OutputDetails
-import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
-import com.callhandling.media.StreamDetails._
-import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.io.StdIn
+import akka.http.scaladsl.server.Directives._
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
+import com.callhandling.media.DataType.Rational
+import com.callhandling.media.StreamDetails._
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.unmarshalling.Unmarshal
 
 object Service {
   final case class UploadResult(
@@ -37,6 +36,14 @@ object Service {
       outputFormats: List[Format])
 
   final case class ConversionResult(message: String, fileId: String)
+
+  final case class UploadFileForm(description: String)
+  case object UploadFileFormConstant {
+    val FILE = "file"
+    val FILENAME = "file"
+    val JSON = "json"
+  }
+  final case class ConvertFileForm(fileId: String, format: String)
 
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
     type RJF[A] = RootJsonFormat[A]
@@ -57,7 +64,12 @@ object Service {
 
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
     implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat2(ConversionResult)
+
+    implicit val uploadFileFormFormat: RJF[UploadFileForm] = jsonFormat1(UploadFileForm)
+    implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat2(ConvertFileForm)
   }
+
+  final case class MediaFileDetail(description: String)
 
   def apply(fileManagerRegion: ActorRef)(
       implicit system: ActorSystem,
@@ -72,6 +84,7 @@ class Service(fileManagerRegion: ActorRef)(
     timeout: Timeout) {
   import FileActor._
   import Service._
+
   import JsonSupport._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
@@ -91,20 +104,23 @@ class Service(fileManagerRegion: ActorRef)(
 
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
-          case part: BodyPart if part.filename.isDefined && part.name == "file" =>
+          case part: BodyPart if part.filename.isDefined && part.name == UploadFileFormConstant.FILE =>
             part.entity.dataBytes.runWith(fileSink)
-            Future.successful("filename" -> part.filename.get)
-          case part: BodyPart if part.name == "description" =>
+            Future.successful(UploadFileFormConstant.FILENAME -> part.filename.get)
+          case part: BodyPart if part.name == UploadFileFormConstant.JSON =>
             part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
         }.runFold(Map.empty[String, String])(_ + _)
 
-        onSuccess(futureParts) { details =>
+        onSuccess(futureParts) { details => {
+          val form =  Unmarshal(details(UploadFileFormConstant.JSON)).to[UploadFileForm]
           fileManagerRegion ! EntityMessage(
             fileId, SetDetails(
               id = fileId,
               details = Details(
-                filename = details("filename"),
-                description = details("description"))))
+                filename = details(UploadFileFormConstant.FILENAME),
+                description = form.value.map(f => f.get.description).getOrElse(""))))
+          }
+
           val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
           onSuccess(fileDataF) {
             case FileData(id, Details(filename, description), streams, outputFormats, _) =>
@@ -118,11 +134,11 @@ class Service(fileManagerRegion: ActorRef)(
 
   def convertRoute = path("convertFile") {
     post {
-      formFields('fileId, 'format) { (fileId, format) =>
+      entity(as[ConvertFileForm]) { form =>
         val homeDir = System.getProperty("user.home")
-        val outputPath = Paths.get(s"$homeDir/$fileId/$format")
-        val outputDetails = OutputDetails(outputPath, format)
-        val conversionF = fileManagerRegion ? EntityMessage(fileId, ConvertFile(outputDetails))
+        val outputPath = Paths.get(s"$homeDir/$form.fileId/$form.format")
+        val outputDetails = OutputDetails(outputPath, form.format)
+        val conversionF = fileManagerRegion ? EntityMessage(form.fileId, ConvertFile(outputDetails))
 
         onSuccess(conversionF) {
           case ConversionStarted(newFileId) => complete(ConversionResult("Conversion Started", newFileId))
