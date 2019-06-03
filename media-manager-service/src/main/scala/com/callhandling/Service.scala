@@ -35,7 +35,7 @@ object Service {
       streams: List[StreamDetails],
       outputFormats: List[Format])
 
-  final case class ConversionResult(message: String, fileId: String)
+  final case class ConversionResult(message: String, fileId: String, outputDetails: OutputDetails)
 
   final case class UploadFileForm(description: String)
   case object UploadFileFormConstant {
@@ -61,9 +61,10 @@ object Service {
     implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
     implicit val streamDetailsFormat: RJF[StreamDetails] = jsonFormat21(StreamDetails.apply)
     implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
+    implicit val outputDetailsFormat: RJF[OutputDetails] = jsonFormat2(OutputDetails)
 
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
-    implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat2(ConversionResult)
+    implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat3(ConversionResult)
 
     implicit val uploadFileFormFormat: RJF[UploadFileForm] = jsonFormat1(UploadFileForm)
     implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat2(ConvertFileForm)
@@ -135,13 +136,12 @@ class Service(fileManagerRegion: ActorRef)(
   def convertRoute = path("convertFile") {
     post {
       entity(as[ConvertFileForm]) { form =>
-        val homeDir = System.getProperty("user.home")
-        val outputPath = Paths.get(s"$homeDir/$form.fileId/$form.format")
-        val outputDetails = OutputDetails(outputPath, form.format)
-        val conversionF = fileManagerRegion ? EntityMessage(form.fileId, ConvertFile(outputDetails))
+        val outputDetails = OutputDetails("converted", form.format)
+        val conversionF = fileManagerRegion ? EntityMessage(form.fileId, ConvertFile(form.fileId, outputDetails))
 
         onSuccess(conversionF) {
-          case ConversionStarted(newFileId) => complete(ConversionResult("Conversion Started", newFileId))
+          case ConversionStarted(newFileId) =>
+            complete(ConversionResult("Conversion Started", newFileId, outputDetails))
         }
       }
     }

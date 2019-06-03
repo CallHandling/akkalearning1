@@ -1,15 +1,13 @@
 package com.callhandling.media
 
 import java.io.File
-import java.nio.file.{Files, Paths}
+import java.nio.file.Files
 
 import akka.util.ByteString
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.StreamDetails._
-import com.github.kokorin.jaffree.ffprobe.FFprobe
+import com.github.kokorin.jaffree.ffprobe.{FFprobe, Stream}
 import com.github.kokorin.jaffree.{Rational => JRational}
-
-import com.github.kokorin.jaffree.ffprobe.Stream
 
 import scala.collection.JavaConverters._
 

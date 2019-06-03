@@ -27,7 +27,7 @@ object FileActor {
   final case class EntityMessage(id: String, message: Any)
 
   // Conversion Messages
-  final case class ConvertFile(outputDetails: OutputDetails)
+  final case class ConvertFile(fileId: String, outputDetails: OutputDetails)
   final case class ConversionStarted(fileId: String)
 
   // Data
