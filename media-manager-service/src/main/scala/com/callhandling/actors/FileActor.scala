@@ -73,7 +73,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
   }
 
   when(Uploading) {
-    // Uploading is done only when the stream information is extracted
+    // We assume that uploading is done when the stream information is extracted or available.
     case Event(SetStreamInfo(streams, outputFormats), fileData: FileData) =>
       unstashAll()
       goto(UploadDone).using(fileData.copy(streams = streams, outputFormats = outputFormats))
