@@ -23,7 +23,11 @@ class StreamActor extends Actor with ActorLogging {
   def receive(bytes: ByteString): Receive = {
     case StreamInitialized =>
       log.info("Stream Initialized")
+
+      // Inform the parent that the stream has successfully
+      // initialized so it can update its state.
       context.parent ! StreamInitialized
+
       sender() ! Ack
     case data: ByteString =>
       log.info("Received element: {}", data)
