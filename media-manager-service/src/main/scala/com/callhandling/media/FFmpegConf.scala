@@ -1,11 +1,21 @@
 package com.callhandling.media
 
+import java.io.File
 import java.nio.file.Paths
 
 object FFmpegConf {
   lazy val Bin = Paths.get("/usr/bin/")
-  lazy val HomeDir = {
-    val homeDir = System.getProperty("user.home")
-    s"$homeDir/akkalearning"
+
+  lazy val StorageDir = {
+    // get the temporary directory
+    val homeDir = System.getProperty("java.io.tmpdir")
+
+    val storageDir = s"$homeDir/akkalearning"
+
+    // create the file if it does not exist.
+    val dir = new File(storageDir)
+    if (!dir.exists) dir.mkdir()
+
+    storageDir
   }
 }

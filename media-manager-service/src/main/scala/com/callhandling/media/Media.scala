@@ -6,6 +6,8 @@ import java.nio.file.Files
 import akka.util.ByteString
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.StreamDetails._
+import com.callhandling.util.FileUtil
+import com.github.kokorin.jaffree.ffmpeg.FFmpeg
 import com.github.kokorin.jaffree.ffprobe.{FFprobe, Stream}
 import com.github.kokorin.jaffree.{Rational => JRational}
 
@@ -21,9 +23,7 @@ object DataType {
 
 object StreamDetails {
   def extractFrom(data: ByteString): List[StreamDetails] = {
-    val uuid = java.util.UUID.randomUUID().toString
-    val path = new File(s"${FFmpegConf.HomeDir}/$uuid").toPath
-    Files.write(path, data.toArray)
+    val path = FileUtil.writeToTempAndGetPath(data)
 
     val result = FFprobe.atPath(FFmpegConf.Bin)
       .setInput(path)

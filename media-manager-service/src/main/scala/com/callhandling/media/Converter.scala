@@ -2,12 +2,27 @@ package com.callhandling.media
 
 import java.io.InputStream
 import java.nio.file.{Path, Paths}
+import java.text.SimpleDateFormat
+import java.time.Instant
+import java.util.Date
+import java.util.concurrent.TimeUnit
 
-import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, FFmpegProgress, PipeInput, ProgressListener, UrlOutput}
+import akka.stream.scaladsl.StreamConverters
+import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, FFmpegProgress, PipeInput, ProgressListener, UrlInput, UrlOutput}
 import org.apache.tika.Tika
 
 object Converter {
   case class OutputDetails(filename: String, format: String)
+  case class ProgressDetails(
+      bitRate: Double,
+      drop: Long,
+      dup: Long,
+      fps: Double,
+      frame: Long,
+      q: Double,
+      size: Long,
+      speed: Double,
+      timeMillis: Long)
 
   def getOutputFormats(data: Array[Byte]) = {
     val mimeType = mimeTypeOf(data)
@@ -23,15 +38,34 @@ object Converter {
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def convertFile(fileId: String, inputStream: InputStream): OutputDetails => Unit = {
+  def convertFile(fileId: String, inputPath: Path): OutputDetails => Unit = {
     case OutputDetails(_, format) =>
-      val homeDir = System.getProperty("user.home")
-      val outputPath = Paths.get(s"$homeDir/$fileId/$format")
+      val outputPath = Paths.get(s"${FFmpegConf.StorageDir}/$fileId.$format")
+
+      val progressListener: ProgressListener = { progress =>
+        val progressDetails = ProgressDetails(
+          bitRate = progress.getBitrate,
+          drop = progress.getDrop,
+          dup = progress.getDup,
+          fps = progress.getFps,
+          frame = progress.getFrame,
+          q = progress.getQ,
+          size = progress.getSize,
+          speed = progress.getSpeed,
+          timeMillis = progress.getTimeMillis)
+        println(s"Progress: $progressDetails")
+
+        // display the time
+        val date = new Date(progressDetails.timeMillis)
+        println(s"Date: $date")
+      }
 
       FFmpeg.atPath(FFmpegConf.Bin)
-        .addInput(PipeInput.pumpFrom(inputStream))
+        //.addInput(PipeInput.pumpFrom(inputStream))
+        .addInput(UrlInput.fromPath(inputPath))
         .addOutput(UrlOutput.toPath(outputPath)
           .setFormat(format))
+        .setProgressListener(progressListener)
         .execute()
   }
 }
