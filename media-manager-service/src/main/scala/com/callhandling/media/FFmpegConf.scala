@@ -8,9 +8,9 @@ object FFmpegConf {
 
   lazy val StorageDir = {
     // get the temporary directory
-    val homeDir = System.getProperty("java.io.tmpdir")
+    val tmpDir = System.getProperty("java.io.tmpdir")
 
-    val storageDir = s"$homeDir/akkalearning"
+    val storageDir = s"$tmpDir/akkalearning"
 
     // create the file if it does not exist.
     val dir = new File(storageDir)

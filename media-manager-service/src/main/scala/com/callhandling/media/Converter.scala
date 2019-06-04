@@ -68,7 +68,5 @@ object Converter {
         .setProgressListener(progressListener)
         .execute()
   }
-
-
 }
 
