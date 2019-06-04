@@ -39,9 +39,9 @@ object Service {
 
   final case class UploadFileForm(description: String)
   case object UploadFileFormConstant {
-    val FILE = "file"
-    val FILENAME = "file"
-    val JSON = "json"
+    val File = "file"
+    val Filename = "file"
+    val Json = "json"
   }
   final case class ConvertFileForm(fileId: String, format: String)
 
@@ -105,20 +105,20 @@ class Service(fileManagerRegion: ActorRef)(
 
       entity(as[Multipart.FormData]) { formData =>
         val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
-          case part: BodyPart if part.filename.isDefined && part.name == UploadFileFormConstant.FILE =>
+          case part: BodyPart if part.filename.isDefined && part.name == UploadFileFormConstant.File =>
             part.entity.dataBytes.runWith(fileSink)
-            Future.successful(UploadFileFormConstant.FILENAME -> part.filename.get)
-          case part: BodyPart if part.name == UploadFileFormConstant.JSON =>
+            Future.successful(UploadFileFormConstant.Filename -> part.filename.get)
+          case part: BodyPart if part.name == UploadFileFormConstant.Json =>
             part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
         }.runFold(Map.empty[String, String])(_ + _)
 
         onSuccess(futureParts) { details => {
-          val form =  Unmarshal(details(UploadFileFormConstant.JSON)).to[UploadFileForm]
+          val form =  Unmarshal(details(UploadFileFormConstant.Json)).to[UploadFileForm]
           fileManagerRegion ! EntityMessage(
             fileId, SetDetails(
               id = fileId,
               details = Details(
-                filename = details(UploadFileFormConstant.FILENAME),
+                filename = details(UploadFileFormConstant.Filename),
                 description = form.value.map(f => f.get.description).getOrElse(""))))
           }
 
@@ -126,7 +126,7 @@ class Service(fileManagerRegion: ActorRef)(
           onSuccess(fileDataF) {
             case FileData(id, Details(filename, description), streams, outputFormats, _) =>
               complete(UploadResult(id, filename, description, streams, outputFormats))
-            case _ => complete(HttpResponse(InternalServerError, entity = "Could not retrieve file data"))
+            case _ => complete(internalError("Could not retrieve file data."))
           }
         }
       }
@@ -140,12 +140,15 @@ class Service(fileManagerRegion: ActorRef)(
         val conversionF = fileManagerRegion ? EntityMessage(form.fileId, ConvertFile(form.fileId, outputDetails))
 
         onSuccess(conversionF) {
-          case ConversionStarted(newFileId) =>
+          case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
+          case ConversionStarted(Right(newFileId)) =>
             complete(ConversionResult("Conversion Started", newFileId, outputDetails))
         }
       }
     }
   }
+
+  def internalError(msg: String) = HttpResponse(InternalServerError, entity = msg)
 
   def restart(): Unit = {
     val route = uploadRoute ~ convertRoute

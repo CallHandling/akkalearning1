@@ -38,10 +38,23 @@ class StreamActor extends Actor with ActorLogging {
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
 
-    case ConvertFile(fileId, outputDetails) =>
-      log.info("Converting file...")
-      sender() ! ConversionStarted(FileActor.generateId)
-      Converter.convertFile(fileId, FileUtil.writeToTempAndGetPath(bytes))(outputDetails)
+    case (ConvertFile(fileId, outputDetails), streams: List[StreamDetails]) =>
+      log.info("Retrieving media streams...")
+
+      def error(message: String) = {
+        log.error(s"Conversion Failed: $message")
+        Left(message)
+      }
+
+      val result = streams.headOption.map { stream =>
+        stream.time.duration.map { timeDuration =>
+          val inputPath = FileUtil.writeToTempAndGetPath(bytes)
+          Converter.convertFile(fileId, inputPath, timeDuration)(outputDetails)
+          Right(FileActor.generateId)
+        } getOrElse error("Could not extract time duration.")
+      } getOrElse error("No media stream available.")
+
+      sender() ! ConversionStarted(result)
   }
 
   def receive: Receive = receive(ByteString.empty)

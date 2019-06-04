@@ -38,7 +38,7 @@ object Converter {
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def convertFile(fileId: String, inputPath: Path): OutputDetails => Unit = {
+  def convertFile(fileId: String, inputPath: Path, timeDuration: Float): OutputDetails => Unit = {
     case OutputDetails(_, format) =>
       val outputPath = Paths.get(s"${FFmpegConf.StorageDir}/$fileId.$format")
 
@@ -55,18 +55,20 @@ object Converter {
           timeMillis = progress.getTimeMillis)
         println(s"Progress: $progressDetails")
 
-        // display the time
-        val date = new Date(progressDetails.timeMillis)
-        println(s"Date: $date")
+        // display the progress
+        val timeDurationMillis = timeDuration * 1000
+        val percent = progressDetails.timeMillis / timeDurationMillis * 100
+        println(s"Percent: $percent")
       }
 
       FFmpeg.atPath(FFmpegConf.Bin)
-        //.addInput(PipeInput.pumpFrom(inputStream))
         .addInput(UrlInput.fromPath(inputPath))
         .addOutput(UrlOutput.toPath(outputPath)
           .setFormat(format))
         .setProgressListener(progressListener)
         .execute()
   }
+
+
 }
 

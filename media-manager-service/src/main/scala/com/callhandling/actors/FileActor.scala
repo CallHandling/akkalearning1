@@ -28,7 +28,7 @@ object FileActor {
 
   // Conversion Messages
   final case class ConvertFile(fileId: String, outputDetails: OutputDetails)
-  final case class ConversionStarted(fileId: String)
+  final case class ConversionStarted(either: Either[String, String])
 
   // Data
   sealed trait Data
@@ -84,7 +84,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       sender() ! fileData
       stay
     case Event(msg: ConvertFile, fileData: FileData) =>
-      fileData.streamRef forward msg
+      fileData.streamRef forward (msg, fileData.streams)
       stay
   }
 
