@@ -1,12 +1,14 @@
 package com.callhandling.actors
 
+import java.nio.file.Path
+
 import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
 import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.StreamDetails
+import com.callhandling.media.{Converter, StreamDetails}
 
 object FileActor {
   def props: Props = Props[FileActor]
@@ -27,7 +29,8 @@ object FileActor {
   final case class EntityMessage(id: String, message: Any)
 
   // Conversion Messages
-  final case class ConvertFile(fileId: String, outputDetails: OutputDetails)
+  final case class PrepareConversion(fileId: String, outputDetails: OutputDetails)
+  final case class ConvertFile(outputDetails: OutputDetails, inputPath: Path, timeDuration: Float)
   final case class ConversionStarted(either: Either[String, String])
 
   // Data
@@ -83,8 +86,11 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       stay
-    case Event(msg: ConvertFile, fileData: FileData) =>
+    case Event(msg: PrepareConversion, fileData: FileData) =>
       fileData.streamRef forward (msg, fileData.streams)
+      stay
+    case Event(ConvertFile(outputDetails, inputPath, timeDuration), fileData: FileData) =>
+      Converter.convertFile(fileData.id, inputPath, timeDuration)(outputDetails)
       stay
   }
 

@@ -5,7 +5,7 @@ import java.nio.file.Files
 
 import akka.actor.{Actor, ActorLogging}
 import akka.util.ByteString
-import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, SetStreamInfo}
+import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, PrepareConversion, SetStreamInfo}
 import com.callhandling.media.{Converter, FFmpegConf, StreamDetails}
 import com.callhandling.util.FileUtil
 
@@ -42,7 +42,7 @@ class StreamActor extends Actor with ActorLogging {
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
 
-    case (ConvertFile(fileId, outputDetails), streams: List[StreamDetails]) =>
+    case (PrepareConversion(fileId, outputDetails), streams: List[StreamDetails]) =>
       log.info("Retrieving media streams...")
 
       def error(message: String) = {
@@ -53,7 +53,12 @@ class StreamActor extends Actor with ActorLogging {
       val result = streams.headOption.map { stream =>
         stream.time.duration.map { timeDuration =>
           val inputPath = FileUtil.writeToTempAndGetPath(bytes)
-          Converter.convertFile(fileId, inputPath, timeDuration)(outputDetails)
+
+          // Tell the parent to perform the conversion to avoid
+          // blocking the process. We need to return the result
+          // here immediately.
+          context.parent ! ConvertFile(outputDetails, inputPath, timeDuration)
+
           Right(FileActor.generateId)
         } getOrElse error("Could not extract time duration.")
       } getOrElse error("No media stream available.")
