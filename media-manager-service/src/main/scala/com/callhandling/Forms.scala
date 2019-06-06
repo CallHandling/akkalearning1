@@ -6,32 +6,44 @@ import akka.http.scaladsl.server.{Rejection}
 final case class FieldErrorInfo(name: String, error: String)
 final case class FormValidationRejection(invalidFields: Seq[FieldErrorInfo]) extends Rejection
 trait Validator[T] extends (T => Seq[FieldErrorInfo]) {
-  protected def validationStage(rule: Boolean, fieldName: String, errorText: String): Option[FieldErrorInfo] =
-    if (rule) Some(FieldErrorInfo(fieldName, errorText)) else None
+  protected def validation(validation: Validation[String], fieldName: String, field: String): Option[FieldErrorInfo] = {
+    if(validation.rule(field)) Some(FieldErrorInfo(fieldName, validation.errorMessage(fieldName))) else None
+  }
+  protected def validation2(validation: Validation[(String, Int)], fieldName: String, field: String, limit: Int): Option[FieldErrorInfo] = {
+    if(validation.rule((field, limit))) Some(FieldErrorInfo(fieldName, validation.errorMessage((fieldName, limit)))) else None
+  }
 }
 
+case class Validation[S](rule: S => Boolean, errorMessage: S => String)
 object ValidationUtils {
-  def isEmptyRule(s: String) = if (s.isEmpty) true else false
-  def isEmptyMessage(fieldName: String) = fieldName + " must not be empty"
-}
+  private def requiredRule(s: String) = if (s.nonEmpty) false else true
+  private def requiredMessage(fieldName: String) = fieldName + " is required"
+  def requiredValidation = Validation[String](requiredRule, requiredMessage)
 
+  private def minRule(s: (String, Int)) = if (s._1.size >= s._2 ) false else true
+  private def minMessage(s: (String, Int)) = s._1 + " minimum chars of " + s._2
+  def minValidation = Validation[(String, Int)](minRule, minMessage)
+}
 
 object Forms {
 
-  case object UploadFileFormConstant {
-    val File = "file"
-    val Filename = "file"
-    val Json = "json"
-  }
   final case class UploadFileForm(description: String)
-  final case class ConvertFileForm(fileId: String, format: String)
+  object UploadFileFormValidator extends Validator[UploadFileForm] {
+    override def apply(model: UploadFileForm): Seq[FieldErrorInfo] = {
 
+      val description: Option[FieldErrorInfo] = validation2(ValidationUtils.minValidation, "fileId", model.description, 5)
+
+      (description :: Nil).flatten
+    }
+  }
+
+  final case class ConvertFileForm(fileId: String, format: String)
   object ConvertFileFormValidator extends Validator[ConvertFileForm] {
     override def apply(model: ConvertFileForm): Seq[FieldErrorInfo] = {
-      val fileId: Option[FieldErrorInfo] = validationStage(ValidationUtils.isEmptyRule(model.fileId), "fileId",
-        ValidationUtils.isEmptyMessage("fileId"))
-      val format: Option[FieldErrorInfo] = validationStage(ValidationUtils.isEmptyRule(model.format), "format",
-        ValidationUtils.isEmptyMessage("format"))
+
+      val fileId: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "fileId", model.fileId)
+      val format: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "format", model.format)
+
       (fileId :: format :: Nil).flatten
     }
   }

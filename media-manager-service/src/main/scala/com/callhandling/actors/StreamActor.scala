@@ -1,18 +1,15 @@
 package com.callhandling.actors
 
-import java.io.{ByteArrayInputStream, File}
-import java.nio.file.Files
-
 import akka.actor.{Actor, ActorLogging}
 import akka.util.ByteString
-import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, PrepareConversion, SetStreamInfo}
-import com.callhandling.media.{Converter, FFmpegConf, StreamDetails}
+import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, EntityMessage, PrepareConversion, SetStreamInfo}
+import com.callhandling.media.{Converter, StreamDetails}
 import com.callhandling.util.FileUtil
 
 object StreamActor {
   // Streaming messages
   case object Ack
-  case object StreamInitialized
+  case class StreamInitialized(filename: String)
   case object StreamCompleted
   final case class StreamFailure(ex: Throwable)
 }
@@ -21,12 +18,12 @@ class StreamActor extends Actor with ActorLogging {
   import StreamActor._
 
   def receive(bytes: ByteString): Receive = {
-    case StreamInitialized =>
+    case cmd @ StreamInitialized(_) =>
       log.info("Stream Initialized")
 
       // Inform the parent that the stream has successfully
       // initialized so it can update its state.
-      context.parent ! StreamInitialized
+      context.parent ! cmd
 
       sender() ! Ack
     case data: ByteString =>
@@ -42,7 +39,7 @@ class StreamActor extends Actor with ActorLogging {
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
 
-    case (PrepareConversion(fileId, outputDetails), streams: List[StreamDetails]) =>
+    case (PrepareConversion(_, outputDetails), streams: List[StreamDetails]) =>
       log.info("Retrieving media streams...")
 
       def error(message: String) = {

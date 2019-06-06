@@ -2,9 +2,8 @@ package com.callhandling
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
-import akka.http.scaladsl.model.{HttpResponse, Multipart}
+import akka.http.scaladsl.model.{HttpResponse}
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
@@ -16,7 +15,7 @@ import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
 
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor}
 import scala.io.StdIn
 import akka.http.scaladsl.server.Directives.{entity, _}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
@@ -24,10 +23,11 @@ import com.callhandling.media.DataType.Rational
 import com.callhandling.media.StreamDetails._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.{Directive1, RejectionHandler}
-import akka.http.scaladsl.unmarshalling.{ Unmarshal}
 import com.callhandling.Forms.{ConvertFileForm,  UploadFileForm}
 
 object Service {
+
+  final case class FileIdResult(fileId: String)
   final case class UploadResult(
       fileId: String,
       filename: String,
@@ -55,6 +55,7 @@ object Service {
     implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
     implicit val outputDetailsFormat: RJF[OutputDetails] = jsonFormat2(OutputDetails)
 
+    implicit val fileIdResultFormat: RJF[FileIdResult] = jsonFormat1(FileIdResult)
     implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
     implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat3(ConversionResult)
 
@@ -91,6 +92,7 @@ class Service(fileManagerRegion: ActorRef) (
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
 
+  implicit val uploadFileFormValidator = UploadFileFormValidator
   implicit val convertFileFormValidator = ConvertFileFormValidator
 
   implicit def formValidationRejectionHandler =
@@ -100,45 +102,46 @@ class Service(fileManagerRegion: ActorRef) (
       }
       .result()
 
-  def uploadv1 = path("upload") {
+  def uploadv1 = pathPrefix("upload") {
     pathEndOrSingleSlash {
       post {
-        val fileId = FileActor.generateId
-        val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
-        val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
-
-        lazy val fileSink = Sink.actorRefWithAck(
-          streamActor,
-          onInitMessage = StreamInitialized,
-          ackMessage = Ack,
-          onCompleteMessage = StreamCompleted,
-          onFailureMessage = StreamFailure)
-
-        entity(as[Multipart.FormData]) { formData =>
-          val futureParts: Future[Map[String, String]] = formData.parts.mapAsync[(String, String)](1) {
-            case part: BodyPart if part.filename.isDefined && part.name == UploadFileFormConstant.File =>
-              part.entity.dataBytes.runWith(fileSink)
-              Future.successful(UploadFileFormConstant.Filename -> part.filename.get)
-            case part: BodyPart if part.name == UploadFileFormConstant.Json =>
-              part.toStrict(2.seconds).map(strict => part.name -> strict.entity.data.utf8String)
-          }.runFold(Map.empty[String, String])(_ + _)
-
-          onSuccess(futureParts) { details => {
-            val form = Unmarshal(details(UploadFileFormConstant.Json)).to[UploadFileForm]
-            fileManagerRegion ! EntityMessage(
-              fileId, SetDetails(
-                id = fileId,
-                details = Details(
-                  filename = details(UploadFileFormConstant.Filename),
-                  description = form.value.map(f => f.get.description).getOrElse(""))))
+        entity(as[UploadFileForm]) { form =>
+          validateForm(form).apply {
+            f =>
+              val fileId = FileActor.generateId
+              val fileDataF = fileManagerRegion ? EntityMessage(fileId, SetFormDetails(fileId, f))
+              onSuccess(fileDataF) {
+                case FileData(id, _, _, _, _) =>
+                  complete(FileIdResult(id))
+                case _ => complete(internalError("Could not retrieve file data."))
+              }
           }
+        }
+      }
+    } ~
+    withoutSizeLimit {
+      path(Remaining) { fileId =>
+        put {
+          fileUpload("file") {
+            case (metadata, byteSource) =>
+              val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
+              val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
 
-            val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
-            onSuccess(fileDataF) {
-              case FileData(id, Details(filename, description), streams, outputFormats, _) =>
-                complete(UploadResult(id, filename, description, streams, outputFormats))
-              case _ => complete(internalError("Could not retrieve file data."))
-            }
+              lazy val fileSink = Sink.actorRefWithAck(
+                streamActor,
+                onInitMessage = StreamInitialized(metadata.fileName),
+                ackMessage = Ack,
+                onCompleteMessage = StreamCompleted,
+                onFailureMessage = StreamFailure)
+
+              byteSource.runWith(fileSink)
+
+              val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
+              onSuccess(fileDataF) {
+                case FileData(id, details, streams, outputFormats, _) =>
+                  complete(UploadResult(id, details.filename, details.description, streams, outputFormats))
+                case _ => complete(internalError("Could not retrieve file data."))
+              }
           }
         }
       }

@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
+import com.callhandling.Forms.UploadFileForm
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
 import com.callhandling.media.Converter.OutputDetails
@@ -23,7 +24,7 @@ object FileActor {
 
   // Events
   case object SetUpStream
-  final case class SetDetails(id: String, details: Details)
+  final case class SetFormDetails(id: String, uploadFileForm: UploadFileForm)
   final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
   case object GetFileData
   final case class EntityMessage(id: String, message: Any)
@@ -71,8 +72,8 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       val streamRef = context.actorOf(Props[StreamActor])
       sender() ! streamRef
       stay.using(fileData.copy(streamRef = streamRef))
-    case Event(StreamInitialized, _) =>
-      goto(Uploading)
+    case Event(StreamInitialized(filename), fileData: FileData) =>
+      goto(Uploading).using(fileData.copy(details = Details(filename, fileData.details.description)))
   }
 
   when(Uploading) {
@@ -95,8 +96,10 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
   }
 
   whenUnhandled {
-    case Event(SetDetails(id, details), fileData: FileData) =>
-      stay.using(fileData.copy(id = id, details = details))
+    case Event(SetFormDetails(id, form), fileData: FileData) =>
+      val updated = fileData.copy(id = id, details = Details(fileData.details.filename, form.description))
+      sender() ! updated
+      stay.using(updated)
     case Event(GetFileData, _) =>
       log.info("Data not ready for retrieval. Stashing the request for now.")
       stash()
