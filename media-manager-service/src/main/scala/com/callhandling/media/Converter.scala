@@ -1,14 +1,11 @@
 package com.callhandling.media
 
-import java.io.InputStream
-import java.nio.file.{Path, Paths}
-import java.text.SimpleDateFormat
-import java.time.Instant
-import java.util.Date
-import java.util.concurrent.TimeUnit
+import java.io.ByteArrayOutputStream
+import java.nio.file.Paths
 
-import akka.stream.scaladsl.StreamConverters
-import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, FFmpegProgress, PipeInput, ProgressListener, UrlInput, UrlOutput}
+import akka.util.ByteString
+import com.callhandling.util.FileUtil
+import com.github.kokorin.jaffree.ffmpeg._
 import org.apache.tika.Tika
 
 object Converter {
@@ -38,9 +35,14 @@ object Converter {
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def convertFile(fileId: String, inputPath: Path, timeDuration: Float): OutputDetails => Unit = {
+  def convertFile(
+      fileId: String,
+      bytes: ByteString,
+      timeDuration: Float): OutputDetails => ByteString = {
     case OutputDetails(_, format) =>
-      val outputPath = Paths.get(s"${FFmpegConf.StorageDir}/$fileId.$format")
+      val inputPath = FileUtil.writeToTempAndGetPath(bytes)
+      //val outputPath = Paths.get(s"${FFmpegConf.StorageDir}/$fileId.$format")
+      val outputStream = new ByteArrayOutputStream
 
       val progressListener: ProgressListener = { progress =>
         val progressDetails = ProgressDetails(
@@ -63,10 +65,12 @@ object Converter {
 
       FFmpeg.atPath(FFmpegConf.Bin)
         .addInput(UrlInput.fromPath(inputPath))
-        .addOutput(UrlOutput.toPath(outputPath)
+        .addOutput(PipeOutput.pumpTo(outputStream)
           .setFormat(format))
         .setProgressListener(progressListener)
         .execute()
+
+      ByteString(outputStream.toByteArray)
   }
 }
 

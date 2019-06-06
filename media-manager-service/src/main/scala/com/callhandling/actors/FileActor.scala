@@ -5,6 +5,7 @@ import java.nio.file.Path
 import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.callhandling.Forms.UploadFileForm
+import akka.util.ByteString
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
 import com.callhandling.media.Converter.OutputDetails
@@ -12,6 +13,9 @@ import com.callhandling.media.Formats.Format
 import com.callhandling.media.{Converter, StreamDetails}
 
 object FileActor {
+  val RegionName = "FileManager"
+  val NumberOfShards = 50
+
   def props: Props = Props[FileActor]
 
   def generateId: String = java.util.UUID.randomUUID().toString
@@ -30,8 +34,12 @@ object FileActor {
   final case class EntityMessage(id: String, message: Any)
 
   // Conversion Messages
-  final case class PrepareConversion(fileId: String, outputDetails: OutputDetails)
-  final case class ConvertFile(outputDetails: OutputDetails, inputPath: Path, timeDuration: Float)
+  final case class PrepareConversion(outputDetails: OutputDetails)
+  final case class ConvertFile(
+      fileData: FileData,
+      outputDetails: OutputDetails,
+      bytes: ByteString,
+      timeDuration: Float)
   final case class ConversionStarted(either: Either[String, String])
 
   // Data
@@ -44,10 +52,8 @@ object FileActor {
       outputFormats: List[Format],
       streamRef: ActorRef) extends Data
 
-  val NumberOfShards = 50
-
   def shardRegion(system: ActorSystem): ActorRef = ClusterSharding(system).start(
-    typeName = "FileManager",
+    typeName = RegionName,
     entityProps = Props[FileActor],
     settings = ClusterShardingSettings(system),
     extractEntityId = extractEntityId,
@@ -87,11 +93,14 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       stay
-    case Event(msg: PrepareConversion, fileData: FileData) =>
-      fileData.streamRef forward (msg, fileData.streams)
-      stay
-    case Event(ConvertFile(outputDetails, inputPath, timeDuration), fileData: FileData) =>
-      Converter.convertFile(fileData.id, inputPath, timeDuration)(outputDetails)
+    case Event(msg @ PrepareConversion(OutputDetails(filename, _)), fileData: FileData) =>
+      // The details to be sent should be updated according to the output details
+      // for the converted file
+      val newDetails = Details(
+        filename = filename,
+        description = fileData.details.description)
+
+      fileData.streamRef forward (msg, fileData.copy(details = newDetails))
       stay
   }
 

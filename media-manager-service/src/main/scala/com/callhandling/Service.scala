@@ -8,7 +8,7 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
-import com.callhandling.actors.FileActor
+import com.callhandling.actors.{FileActor, StreamActor}
 import com.callhandling.actors.StreamActor.{Ack, StreamCompleted, StreamFailure, StreamInitialized}
 import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.Formats.Format
@@ -106,15 +106,14 @@ class Service(fileManagerRegion: ActorRef) (
     pathEndOrSingleSlash {
       post {
         entity(as[UploadFileForm]) { form =>
-          validateForm(form).apply {
-            f =>
-              val fileId = FileActor.generateId
-              val fileDataF = fileManagerRegion ? EntityMessage(fileId, SetFormDetails(fileId, f))
-              onSuccess(fileDataF) {
-                case FileData(id, _, _, _, _) =>
-                  complete(FileIdResult(id))
-                case _ => complete(internalError("Could not retrieve file data."))
-              }
+          validateForm(form).apply { f =>
+            val fileId = FileActor.generateId
+            val fileDataF = fileManagerRegion ? EntityMessage(fileId, SetFormDetails(fileId, f))
+            onSuccess(fileDataF) {
+              case FileData(id, _, _, _, _) =>
+                complete(FileIdResult(id))
+              case _ => complete(internalError("Could not retrieve file data."))
+            }
           }
         }
       }
@@ -155,7 +154,7 @@ class Service(fileManagerRegion: ActorRef) (
           validateForm(form).apply {
             f =>
               val outputDetails = OutputDetails("converted", f.format)
-              val conversionF = fileManagerRegion ? EntityMessage(f.fileId, PrepareConversion(f.fileId, outputDetails))
+              val conversionF = fileManagerRegion ? EntityMessage(f.fileId, PrepareConversion(outputDetails))
 
               onSuccess(conversionF) {
                 case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
