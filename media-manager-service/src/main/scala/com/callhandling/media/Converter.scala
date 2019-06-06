@@ -35,8 +35,8 @@ object Converter {
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def convertFile(
-      fileId: String,
+  def apply(
+      fileId: String,   // TODO: We might not need this one anymore
       bytes: ByteString,
       timeDuration: Float): OutputDetails => ByteString = {
     case OutputDetails(_, format) =>

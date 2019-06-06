@@ -7,7 +7,7 @@ import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardReg
 import com.callhandling.Forms.UploadFileForm
 import akka.util.ByteString
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.actors.StreamActor.StreamInitialized
+import com.callhandling.actors.StreamActor.{Ack, StreamInitialized}
 import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.{Converter, StreamDetails}
@@ -24,23 +24,21 @@ object FileActor {
   sealed trait State
   case object Idle extends State
   case object Uploading extends State
-  case object UploadDone extends State
+  case object Ready extends State
+  case object PreparingConversion extends State
+  case object Converting extends State
 
   // Events
-  case object SetUpStream
   final case class SetFormDetails(id: String, uploadFileForm: UploadFileForm)
+  final case class SetUpStream(system: ActorSystem)
   final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
   case object GetFileData
   final case class EntityMessage(id: String, message: Any)
 
   // Conversion Messages
-  final case class PrepareConversion(outputDetails: OutputDetails)
-  final case class ConvertFile(
-      fileData: FileData,
-      outputDetails: OutputDetails,
-      bytes: ByteString,
-      timeDuration: Float)
+  final case class ConvertFile(outputDetails: OutputDetails)
   final case class ConversionStarted(either: Either[String, String])
+  case object ConversionCompleted
 
   // Data
   sealed trait Data
@@ -74,8 +72,8 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
   startWith(Idle, FileData("", Details("", ""), Nil, Nil, ActorRef.noSender))
 
   when(Idle) {
-    case Event(SetUpStream, fileData: FileData) =>
-      val streamRef = context.actorOf(Props[StreamActor])
+    case Event(SetUpStream(system), fileData: FileData) =>
+      val streamRef = context.actorOf(StreamActor.props(system))
       sender() ! streamRef
       stay.using(fileData.copy(streamRef = streamRef))
     case Event(StreamInitialized(filename), fileData: FileData) =>
@@ -86,22 +84,37 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     // We assume that uploading is done when the stream information is extracted or available.
     case Event(SetStreamInfo(streams, outputFormats), fileData: FileData) =>
       unstashAll()
-      goto(UploadDone).using(fileData.copy(streams = streams, outputFormats = outputFormats))
+      goto(Ready).using(fileData.copy(streams = streams, outputFormats = outputFormats))
   }
 
-  when(UploadDone) {
+  when(Ready) {
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       stay
-    case Event(msg @ PrepareConversion(OutputDetails(filename, _)), fileData: FileData) =>
+    case Event(msg @ ConvertFile(OutputDetails(filename, _)), fileData: FileData) =>
+      log.info("Preparing for conversion...")
+
       // The details to be sent should be updated according to the output details
-      // for the converted file
+      // for the converted file.
       val newDetails = Details(
         filename = filename,
         description = fileData.details.description)
 
       fileData.streamRef forward (msg, fileData.copy(details = newDetails))
-      stay
+      goto(PreparingConversion)
+  }
+
+  when(PreparingConversion) {
+    case Event(msg: ConversionStarted, _) =>
+      log.info("Converting...")
+      sender() ! msg
+      goto(Converting)
+  }
+
+  when(Converting) {
+    case Event(ConversionCompleted, _) =>
+      log.info("Conversion Completed.")
+      goto(Ready)
   }
 
   whenUnhandled {

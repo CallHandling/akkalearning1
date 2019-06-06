@@ -9,11 +9,12 @@ import java.nio.file.Files
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.cluster.sharding.ClusterSharding
-import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.{Sink, Source}
 import akka.pattern.ask
+import akka.stream.ActorMaterializer
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms.UploadFileFormConstant
-import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, Details, EntityMessage, FileData, PrepareConversion, SetDetails, SetStreamInfo, SetUpStream}
+import com.callhandling.actors.FileActor.{ConversionCompleted, ConversionStarted, ConvertFile, Details, EntityMessage, FileData, SetDetails, SetStreamInfo, SetUpStream}
 import com.callhandling.media.{Converter, FFmpegConf, StreamDetails}
 import com.callhandling.util.FileUtil
 
@@ -29,8 +30,12 @@ object StreamActor {
   case object StreamCompleted
   final case class StreamFailure(ex: Throwable)
 
-  def createSink(fileManagerRegion: ActorRef, fileId: String)(implicit timeout: Timeout) = {
-    val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
+  def createSink(
+      system: ActorSystem,
+      fileManagerRegion: ActorRef,
+      fileId: String)
+      (implicit timeout: Timeout) = {
+    val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream(system))
     val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
 
     Sink.actorRefWithAck(
@@ -67,7 +72,7 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
 
-    case (PrepareConversion(outputDetails), fileData: FileData) =>
+    case (ConvertFile(outputDetails), fileData: FileData) =>
       log.info("Retrieving media streams...")
 
       val streams = fileData.streams
@@ -80,18 +85,24 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
       val result = streams.headOption.map { stream =>
         stream.time.duration.map { timeDuration =>
           val newFileId = FileActor.generateId
+          val result = Right(newFileId)
+
+          context.parent forward ConversionStarted(result)
 
           val region = ClusterSharding(system).shardRegion(FileActor.RegionName)
           implicit val timeout: Timeout = 2.seconds
 
-          createSink(region, newFileId)
+          val fileSink = createSink(system, region, newFileId)
+          val convertedBytes = Converter(newFileId, bytes, timeDuration)(outputDetails)
+          val convertedStream = Source.single(convertedBytes)
+          convertedStream.runWith(fileSink)(ActorMaterializer())
+
           region ! EntityMessage(
             newFileId, SetDetails(id = newFileId, details = fileData.details))
 
-          //region ! EntityMessage(
-          //  newFileId, ConvertFile(fileData, outputDetails, bytes, timeDuration))
+          context.parent ! ConversionCompleted
 
-          Right(newFileId)
+          result
         } getOrElse error("Could not extract time duration.")
       } getOrElse error("No media stream available.")
 
