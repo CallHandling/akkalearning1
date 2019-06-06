@@ -1,6 +1,6 @@
 package com.callhandling.media
 
-import java.io.ByteArrayOutputStream
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.file.Paths
 
 import akka.util.ByteString
@@ -35,10 +35,7 @@ object Converter {
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def apply(
-      fileId: String,   // TODO: We might not need this one anymore
-      bytes: ByteString,
-      timeDuration: Float): OutputDetails => ByteString = {
+  def convert(bytes: ByteString, timeDuration: Float): OutputDetails => ByteString = {
     case OutputDetails(_, format) =>
       val inputPath = FileUtil.writeToTempAndGetPath(bytes)
       //val outputPath = Paths.get(s"${FFmpegConf.StorageDir}/$fileId.$format")
@@ -64,6 +61,7 @@ object Converter {
       }
 
       FFmpeg.atPath(FFmpegConf.Bin)
+        //.addInput(PipeInput.pumpFrom(new ByteArrayInputStream(bytes.toArray)))
         .addInput(UrlInput.fromPath(inputPath))
         .addOutput(PipeOutput.pumpTo(outputStream)
           .setFormat(format))

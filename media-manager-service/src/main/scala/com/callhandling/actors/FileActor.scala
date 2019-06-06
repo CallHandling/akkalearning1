@@ -25,7 +25,6 @@ object FileActor {
   case object Idle extends State
   case object Uploading extends State
   case object Ready extends State
-  case object PreparingConversion extends State
   case object Converting extends State
 
   // Events
@@ -36,7 +35,8 @@ object FileActor {
   final case class EntityMessage(id: String, message: Any)
 
   // Conversion Messages
-  final case class ConvertFile(outputDetails: OutputDetails)
+  final case class ConvertAndKeep(outputDetails: OutputDetails)
+  final case class ConvertFile(outputDetails: OutputDetails, timeDuration: Float)
   final case class ConversionStarted(either: Either[String, String])
   case object ConversionCompleted
 
@@ -91,7 +91,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       stay
-    case Event(msg @ ConvertFile(OutputDetails(filename, _)), fileData: FileData) =>
+    case Event(msg @ ConvertAndKeep(OutputDetails(filename, _)), fileData: FileData) =>
       log.info("Preparing for conversion...")
 
       // The details to be sent should be updated according to the output details
@@ -101,13 +101,10 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
         description = fileData.details.description)
 
       fileData.streamRef forward (msg, fileData.copy(details = newDetails))
-      goto(PreparingConversion)
-  }
-
-  when(PreparingConversion) {
-    case Event(msg: ConversionStarted, _) =>
+      stay
+    case Event(msg: ConvertFile, fileData: FileData) =>
       log.info("Converting...")
-      sender() ! msg
+      fileData.streamRef forward msg
       goto(Converting)
   }
 
@@ -123,9 +120,15 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       sender() ! updated
       stay.using(updated)
     case Event(GetFileData, _) =>
-      log.info("Data not ready for retrieval. Stashing the request for now.")
-      stash()
-      stay
+      stashAndStay("retrieval")
+    case Event(_: ConvertFile, _) | Event(ConvertAndKeep(_), _) =>
+      stashAndStay("conversion")
+  }
+
+  private def stashAndStay(action: String) = {
+    log.info(s"Data not ready for $action yet. Stashing the request for now.")
+    stash()
+    stay
   }
 
   initialize()
