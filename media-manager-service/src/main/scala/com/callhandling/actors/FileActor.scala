@@ -30,13 +30,24 @@ object FileActor {
   final case class SetUpStream(system: ActorSystem)
   final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
   case object GetFileData
-  final case class EntityMessage(id: String, message: Any)
+  case object Play
 
-  // Conversion Messages
+  // Conversion Messages/Events
   final case class RequestForConversion(outputDetails: OutputDetails)
   final case class Convert(outputDetails: OutputDetails, timeDuration: Float)
+  case object CompleteConversion
+
+  // Non-command messages
   final case class ConversionStarted(either: Either[String, String])
-  case object ConversionCompleted
+
+  /**
+    * Send this message to the shard region as opposed to the entity itself.
+    * The shard region will the entity, or create one if it doesn't exist,
+    * and forward the message to it.
+    * @param id The ID of the entity.
+    * @param message The message the shard region will send to the entity.
+    */
+  final case class SendToEntity(id: String, message: Any)
 
   // Data
   sealed trait Data
@@ -57,11 +68,11 @@ object FileActor {
     extractShardId = extractShardId)
 
   val extractEntityId: ShardRegion.ExtractEntityId = {
-    case EntityMessage(id, message) => (id, message)
+    case SendToEntity(id, message) => (id, message)
   }
 
   val extractShardId: ShardRegion.ExtractShardId = {
-    case EntityMessage(id, _) => (id.hashCode % NumberOfShards).toString
+    case SendToEntity(id, _) => (id.hashCode % NumberOfShards).toString
   }
 }
 
@@ -105,10 +116,14 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       log.info("Converting...")
       fileData.streamRef forward msg
       goto(Converting)
+    case Event(Play, fileData: FileData) =>
+      fileData.streamRef forward Play
+      stay
+
   }
 
   when(Converting) {
-    case Event(ConversionCompleted, ConversionData(fileData, _)) =>
+    case Event(CompleteConversion, ConversionData(fileData, _)) =>
       log.info("Conversion Completed.")
       goto(Ready).using(fileData)
     case Event(progressDetails: ProgressDetails, fileData: FileData) =>

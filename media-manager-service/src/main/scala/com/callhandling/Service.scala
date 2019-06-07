@@ -159,7 +159,7 @@ class Service(fileManagerRegion: ActorRef) (
               onSuccess(conversionF) {
                 case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
                 case ConversionStarted(Right(newFileId)) =>
-                complete(ConversionResult("Conversion Started", newFileId, outputDetails))
+                  complete(ConversionResult("Conversion Started", newFileId, outputDetails))
               }
           }
         }

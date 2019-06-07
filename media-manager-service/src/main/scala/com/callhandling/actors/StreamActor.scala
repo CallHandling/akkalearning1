@@ -6,7 +6,7 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
-import com.callhandling.actors.FileActor.{ConversionStarted, Convert, EntityMessage, SetStreamInfo, _}
+import com.callhandling.actors.FileActor.{ConversionStarted, Convert, SendToEntity, SetStreamInfo, _}
 import com.callhandling.media.{Converter, StreamDetails}
 
 import scala.concurrent.Await
@@ -22,12 +22,12 @@ object StreamActor {
   final case class StreamFailure(ex: Throwable)
 
   def createSink(
-                  system: ActorSystem,
-                  fileManagerRegion: ActorRef,
-                  fileId: String,
-                  filename: String)
-                (implicit timeout: Timeout) = {
-    val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream(system))
+      system: ActorSystem,
+      fileManagerRegion: ActorRef,
+      fileId: String,
+      filename: String)
+      (implicit timeout: Timeout) = {
+    val streamActorF = fileManagerRegion ? SendToEntity(fileId, SetUpStream(system))
     val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
 
     Sink.actorRefWithAck(
@@ -42,14 +42,13 @@ object StreamActor {
 case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
   import StreamActor._
 
-  def receive(bytes: ByteString): Receive = {
+  def handleStreamUpload(bytes: ByteString): Receive = {
     case cmd: StreamInitialized =>
       log.info("Stream Initialized")
 
       // Inform the parent that the stream has successfully
       // initialized so it can update its state.
       context.parent ! cmd
-
       sender() ! Ack
     case data: ByteString =>
       log.info("Received element: {}", data)
@@ -60,10 +59,11 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
 
       val streams = StreamDetails.extractFrom(bytes)
       val outputFormats = Converter.getOutputFormats(bytes.toArray)
-
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
+  }
 
+  def handleConversion(bytes: ByteString): Receive = {
     case (RequestForConversion(outputDetails), fileData: FileData) =>
       log.info("Retrieving media streams...")
 
@@ -84,10 +84,10 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
           val fileSink = createSink(system, region, newFileId, fileData.details.filename)
           Source.single(bytes).runWith(fileSink)(ActorMaterializer())
 
-          region ! EntityMessage(
+          region ! SendToEntity(
             newFileId, SetDetails(id = newFileId, details = fileData.details))
 
-          region ! EntityMessage(
+          region ! SendToEntity(
             newFileId, Convert(outputDetails, timeDuration))
 
           Right(newFileId)
@@ -95,14 +95,15 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
       } getOrElse error("No media stream available.")
 
       sender() ! ConversionStarted(result)
-
     case Convert(outputDetails, timeDuration) =>
       val convertedBytes = Converter.convert(bytes, timeDuration, outputDetails) { progress =>
         context.parent ! progress
       }
       context.become(receive(convertedBytes), discardOld = true)
-      context.parent ! ConversionCompleted
+      context.parent ! CompleteConversion
   }
+
+  def receive(bytes: ByteString): Receive = handleStreamUpload(bytes) orElse handleConversion(bytes)
 
   def receive: Receive = receive(ByteString.empty)
 }
