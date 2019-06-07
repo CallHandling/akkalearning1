@@ -21,6 +21,7 @@ import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.io.StdIn
+import scala.util.Success
 
 object Service {
 
@@ -192,8 +193,8 @@ class Service(fileManagerRegion: ActorRef) (
           case FileIdForm(fileId) =>
             val bytesF = fileManagerRegion ? SendToEntity(fileId, Play)
 
-            onSuccess(bytesF) {
-              case bytes: ByteString => complete(bytes)
+            onComplete(bytesF) {
+              case Success(bytes: ByteString) => complete(bytes)
               case _ => complete(internalError("Could not play the file"))
             }
         }
