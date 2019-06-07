@@ -6,7 +6,7 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
-import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, EntityMessage, SetStreamInfo, _}
+import com.callhandling.actors.FileActor.{ConversionStarted, Convert, EntityMessage, SetStreamInfo, _}
 import com.callhandling.media.{Converter, StreamDetails}
 
 import scala.concurrent.Await
@@ -64,7 +64,7 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
       context.parent ! SetStreamInfo(streams, outputFormats)
     case StreamFailure(ex) => log.error(ex, "Stream failed.")
 
-    case (ConvertAndKeep(outputDetails), fileData: FileData) =>
+    case (RequestForConversion(outputDetails), fileData: FileData) =>
       log.info("Retrieving media streams...")
 
       val streams = fileData.streams
@@ -88,7 +88,7 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
             newFileId, SetDetails(id = newFileId, details = fileData.details))
 
           region ! EntityMessage(
-            newFileId, ConvertFile(outputDetails, timeDuration))
+            newFileId, Convert(outputDetails, timeDuration))
 
           Right(newFileId)
         } getOrElse error("Could not extract time duration.")
@@ -96,8 +96,10 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
 
       sender() ! ConversionStarted(result)
 
-    case ConvertFile(outputDetails, timeDuration) =>
-      val convertedBytes = Converter.convert(bytes, timeDuration)(outputDetails)
+    case Convert(outputDetails, timeDuration) =>
+      val convertedBytes = Converter.convert(bytes, timeDuration, outputDetails) { progress =>
+        context.parent ! progress
+      }
       context.become(receive(convertedBytes), discardOld = true)
       context.parent ! ConversionCompleted
   }

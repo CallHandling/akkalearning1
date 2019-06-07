@@ -141,7 +141,7 @@ class Service(fileManagerRegion: ActorRef) (
         entity(as[ConvertFileForm]) { form =>
           validateForm(form).apply { f =>
             val outputDetails = OutputDetails("converted", f.format)
-            val conversionF = fileManagerRegion ? EntityMessage(f.fileId, ConvertAndKeep(outputDetails))
+            val conversionF = fileManagerRegion ? EntityMessage(f.fileId, RequestForConversion(outputDetails))
 
             onSuccess(conversionF) {
               case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))

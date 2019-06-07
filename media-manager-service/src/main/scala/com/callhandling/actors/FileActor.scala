@@ -5,7 +5,7 @@ import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardReg
 import com.callhandling.Forms.UploadFileForm
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
-import com.callhandling.media.Converter.OutputDetails
+import com.callhandling.media.Converter.{OutputDetails, ProgressDetails}
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
 
@@ -33,8 +33,8 @@ object FileActor {
   final case class EntityMessage(id: String, message: Any)
 
   // Conversion Messages
-  final case class ConvertAndKeep(outputDetails: OutputDetails)
-  final case class ConvertFile(outputDetails: OutputDetails, timeDuration: Float)
+  final case class RequestForConversion(outputDetails: OutputDetails)
+  final case class Convert(outputDetails: OutputDetails, timeDuration: Float)
   final case class ConversionStarted(either: Either[String, String])
   case object ConversionCompleted
 
@@ -47,6 +47,7 @@ object FileActor {
       streams: List[StreamDetails],
       outputFormats: List[Format],
       streamRef: ActorRef) extends Data
+  final case class ConversionData(fileData: FileData, progress: ProgressDetails) extends Data
 
   def shardRegion(system: ActorSystem): ActorRef = ClusterSharding(system).start(
     typeName = RegionName,
@@ -89,7 +90,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       stay
-    case Event(msg @ ConvertAndKeep(OutputDetails(filename, _)), fileData: FileData) =>
+    case Event(msg @ RequestForConversion(OutputDetails(filename, _)), fileData: FileData) =>
       log.info("Preparing for conversion...")
 
       // The details to be sent should be updated according to the output details
@@ -100,16 +101,19 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
 
       fileData.streamRef forward (msg, fileData.copy(details = newDetails))
       stay
-    case Event(msg: ConvertFile, fileData: FileData) =>
+    case Event(msg: Convert, fileData: FileData) =>
       log.info("Converting...")
       fileData.streamRef forward msg
       goto(Converting)
   }
 
   when(Converting) {
-    case Event(ConversionCompleted, _) =>
+    case Event(ConversionCompleted, ConversionData(fileData, _)) =>
       log.info("Conversion Completed.")
-      goto(Ready)
+      goto(Ready).using(fileData)
+    case Event(progressDetails: ProgressDetails, fileData: FileData) =>
+      log.info("Progress Details: {}", progressDetails)
+      stay.using(ConversionData(fileData, progressDetails))
   }
 
   whenUnhandled {
@@ -121,7 +125,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       stay.using(fileData.copy(details = details))
     case Event(GetFileData, _) =>
       stashAndStay("retrieval")
-    case Event(_: ConvertFile, _) | Event(ConvertAndKeep(_), _) =>
+    case Event(_: Convert, _) | Event(RequestForConversion(_), _) =>
       stashAndStay("conversion")
   }
 

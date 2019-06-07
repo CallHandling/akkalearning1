@@ -9,6 +9,8 @@ import com.github.kokorin.jaffree.ffmpeg._
 import org.apache.tika.Tika
 
 object Converter {
+  type MimeDetector = String => Boolean
+
   case class OutputDetails(filename: String, format: String)
   case class ProgressDetails(
       bitRate: Double,
@@ -19,7 +21,8 @@ object Converter {
       q: Double,
       size: Long,
       speed: Double,
-      timeMillis: Long)
+      timeMillis: Long,
+      percent: Float)
 
   def getOutputFormats(data: Array[Byte]) = {
     val mimeType = mimeTypeOf(data)
@@ -29,19 +32,22 @@ object Converter {
     else Nil
   }
 
-  def isAudio: String => Boolean = _.startsWith("audio")
-  def isVideo: String => Boolean = _.startsWith("video")
-  def isSupportedMimeType: String => Boolean = mime => isAudio(mime) || isVideo(mime)
+  def isAudio: MimeDetector = _.startsWith("audio")
+  def isVideo: MimeDetector = _.startsWith("video")
+  def isSupportedMimeType: MimeDetector = mime => isAudio(mime) || isVideo(mime)
 
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
-  def convert(bytes: ByteString, timeDuration: Float): OutputDetails => ByteString = {
+  def convert(bytes: ByteString, timeDuration: Float, outputDetails: OutputDetails)
+      (f: ProgressDetails => Unit): ByteString = outputDetails match {
     case OutputDetails(_, format) =>
       val inputPath = FileUtil.writeToTempAndGetPath(bytes)
-      //val outputPath = Paths.get(s"${FFmpegConf.StorageDir}/$fileId.$format")
       val outputStream = new ByteArrayOutputStream
 
       val progressListener: ProgressListener = { progress =>
+        val timeDurationMillis = timeDuration * 1000
+        val percent = progress.getTimeMillis / timeDurationMillis * 100
+
         val progressDetails = ProgressDetails(
           bitRate = progress.getBitrate,
           drop = progress.getDrop,
@@ -51,17 +57,13 @@ object Converter {
           q = progress.getQ,
           size = progress.getSize,
           speed = progress.getSpeed,
-          timeMillis = progress.getTimeMillis)
-        println(s"Progress: $progressDetails")
+          timeMillis = progress.getTimeMillis,
+          percent: Float)
 
-        // display the progress
-        val timeDurationMillis = timeDuration * 1000
-        val percent = progressDetails.timeMillis / timeDurationMillis * 100
-        println(s"Percent: $percent")
+        f(progressDetails)
       }
 
       FFmpeg.atPath(FFmpegConf.Bin)
-        //.addInput(PipeInput.pumpFrom(new ByteArrayInputStream(bytes.toArray)))
         .addInput(UrlInput.fromPath(inputPath))
         .addOutput(PipeOutput.pumpTo(outputStream)
           .setFormat(format))
