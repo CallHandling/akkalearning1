@@ -28,6 +28,7 @@ object Converter {
       s"$percentTwoDecimal% - ${super.toString}"
     }
   }
+  case object EmptyProgress
 
   def getOutputFormats(data: Array[Byte]) = {
     val mimeType = mimeTypeOf(data)

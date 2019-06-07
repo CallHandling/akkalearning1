@@ -9,10 +9,10 @@ import akka.http.scaladsl.server.Directives.{entity, _}
 import akka.http.scaladsl.server.{Directive1, RejectionHandler}
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
-import akka.util.Timeout
-import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
+import akka.util.{ByteString, Timeout}
+import com.callhandling.Forms._
 import com.callhandling.actors.{FileActor, StreamActor}
-import com.callhandling.media.Converter.OutputDetails
+import com.callhandling.media.Converter.{OutputDetails, ProgressDetails}
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
@@ -58,8 +58,10 @@ object Service {
 
     implicit val uploadFileFormFormat: RJF[UploadFileForm] = jsonFormat1(UploadFileForm)
     implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat2(ConvertFileForm)
+    implicit val conversionProgressFormat: RJF[ProgressDetails] = jsonFormat10(ProgressDetails)
 
-    implicit val validatedFieldFormat = jsonFormat2(FieldErrorInfo)
+    implicit val validatedFieldFormat: RJF[FieldErrorInfo] = jsonFormat2(FieldErrorInfo)
+
     def validateForm[T](form: T)(implicit validator: Validator[T]): Directive1[T] = {
       validator(form) match {
         case Nil => provide(form)
@@ -151,16 +153,17 @@ class Service(fileManagerRegion: ActorRef) (
     pathEndOrSingleSlash {
       post {
         entity(as[ConvertFileForm]) { form =>
-          validateForm(form).apply {
-            vform =>
-              val outputDetails = OutputDetails("converted", vform.format)
-              val conversionF = fileManagerRegion ? SendToEntity(vform.fileId, RequestForConversion(outputDetails))
+          validateForm(form).apply { case ConvertFileForm(fileId, format) =>
+            // TODO: filename is still hardcoded here
+            val outputDetails = OutputDetails("converted", format)
 
-              onSuccess(conversionF) {
-                case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
-                case ConversionStarted(Right(newFileId)) =>
-                  complete(ConversionResult("Conversion Started", newFileId, outputDetails))
-              }
+            val conversionF = fileManagerRegion ? SendToEntity(fileId, RequestForConversion(outputDetails))
+
+            onSuccess(conversionF) {
+              case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
+              case ConversionStarted(Right(newFileId)) =>
+                complete(ConversionResult("Conversion Started", newFileId, outputDetails))
+            }
           }
         }
       }
@@ -169,9 +172,13 @@ class Service(fileManagerRegion: ActorRef) (
       get {
         val form = FileIdForm(fileId)
         validateForm(form).apply {
-          vform =>
-            // TODO: conversion status
-            complete(fileId)
+          case FileIdForm(fileId) =>
+            val conversionStatusF = fileManagerRegion ? SendToEntity(fileId, GetConversionStatus)
+
+            onSuccess(conversionStatusF) {
+              case progress: ProgressDetails => complete(progress)
+              case _ => complete(internalError("Could not retrieve conversion status."))
+            }
         }
       }
     }

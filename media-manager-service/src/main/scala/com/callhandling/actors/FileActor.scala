@@ -5,7 +5,7 @@ import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardReg
 import com.callhandling.Forms.UploadFileForm
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
-import com.callhandling.media.Converter.{OutputDetails, ProgressDetails}
+import com.callhandling.media.Converter.{EmptyProgress, OutputDetails, ProgressDetails}
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
 
@@ -36,13 +36,14 @@ object FileActor {
   final case class RequestForConversion(outputDetails: OutputDetails)
   final case class Convert(outputDetails: OutputDetails, timeDuration: Float)
   case object CompleteConversion
+  case object GetConversionStatus
 
   // Non-command messages
   final case class ConversionStarted(either: Either[String, String])
 
   /**
     * Send this message to the shard region as opposed to the entity itself.
-    * The shard region will the entity, or create one if it doesn't exist,
+    * The shard region will find the entity, or create one if it doesn't exist,
     * and forward the message to it.
     * @param id The ID of the entity.
     * @param message The message the shard region will send to the entity.
@@ -129,6 +130,9 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       logProgressAndStay(ConversionData(fileData, progressDetails))
     case Event(progressDetails: ProgressDetails, conversionData: ConversionData) =>
       logProgressAndStay(conversionData.copy(progress = progressDetails))
+    case Event(GetConversionStatus, ConversionData(_, progress)) =>
+      sender() ! progress
+      stay
   }
 
   whenUnhandled {
@@ -142,6 +146,9 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       stashAndStay("retrieval")
     case Event(_: Convert, _) | Event(RequestForConversion(_), _) =>
       stashAndStay("conversion")
+    case Event(GetConversionStatus, _) =>
+      sender() ! EmptyProgress
+      stay
   }
 
   private def stashAndStay(action: String) = {
