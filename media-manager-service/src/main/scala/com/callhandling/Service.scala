@@ -189,14 +189,13 @@ class Service(fileManagerRegion: ActorRef) (
       get {
         val form = FileIdForm(fileId)
         validateForm(form).apply {
-          vform =>
-//            val streamActorF = ??? //TODO: replaced with fileManagerRegion ? EntityMessage(fileId, PlayFile)
-//            onSuccess(streamActorF) {
-//              case byteString: ByteString =>
-//                val entity = HttpEntity.Chunked.fromData(ContentTypes.`application/octet-stream`, Source.single(byteString))
-//                complete(HttpResponse(entity = entity))
-//            }
-            complete(fileId)
+          case FileIdForm(fileId) =>
+            val bytesF = fileManagerRegion ? SendToEntity(fileId, Play)
+
+            onSuccess(bytesF) {
+              case bytes: ByteString => complete(bytes)
+              case _ => complete(internalError("Could not play the file"))
+            }
         }
       }
     }

@@ -103,7 +103,10 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
       context.parent ! CompleteConversion
   }
 
-  def receive(bytes: ByteString): Receive = handleStreamUpload(bytes) orElse handleConversion(bytes)
+  def receive(bytes: ByteString): Receive =
+    handleStreamUpload(bytes) orElse handleConversion(bytes) orElse {
+      case Play => sender() ! bytes
+    }
 
   def receive: Receive = receive(ByteString.empty)
 }

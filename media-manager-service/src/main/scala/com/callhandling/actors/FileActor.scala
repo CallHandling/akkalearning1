@@ -118,6 +118,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       fileData.streamRef forward msg
       goto(Converting)
     case Event(Play, fileData: FileData) =>
+      log.info("Playing...")
       fileData.streamRef forward Play
       stay
   }
