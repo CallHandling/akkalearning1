@@ -3,13 +3,13 @@ package com.callhandling
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.model.{HttpResponse}
+import akka.http.scaladsl.model.HttpResponse
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
 import akka.http.scaladsl.server.Directives.{entity, _}
 import akka.http.scaladsl.server.{Directive1, RejectionHandler}
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
-import akka.util.{Timeout}
+import akka.util.Timeout
 import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
 import com.callhandling.actors.{FileActor, StreamActor}
 import com.callhandling.media.Converter.OutputDetails
@@ -106,7 +106,7 @@ class Service(fileManagerRegion: ActorRef) (
           validateForm(form).apply {
             vform =>
               val fileId = FileActor.generateId
-              val fileDataF = fileManagerRegion ? EntityMessage(fileId, SetFormDetails(fileId, vform))
+              val fileDataF = fileManagerRegion ? SendToEntity(fileId, SetFormDetails(fileId, vform))
               onSuccess(fileDataF) {
                 case FileData(id, _, _, _, _) =>
                   complete(FileIdResult(id))
@@ -132,7 +132,7 @@ class Service(fileManagerRegion: ActorRef) (
                       system, fileManagerRegion, fileId, metadata.fileName)
                     byteSource.runWith(fileSink)
 
-                    val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
+                    val fileDataF = fileManagerRegion ? SendToEntity(fileId, GetFileData)
                     onSuccess(fileDataF) {
                       case FileData(id, Details(filename, description), streams, outputFormats, _) =>
                         complete(UploadResult(id, filename, description, streams, outputFormats))
@@ -154,7 +154,7 @@ class Service(fileManagerRegion: ActorRef) (
           validateForm(form).apply {
             vform =>
               val outputDetails = OutputDetails("converted", vform.format)
-              val conversionF = fileManagerRegion ? EntityMessage(vform.fileId, RequestForConversion(outputDetails))
+              val conversionF = fileManagerRegion ? SendToEntity(vform.fileId, RequestForConversion(outputDetails))
 
               onSuccess(conversionF) {
                 case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))

@@ -53,11 +53,11 @@ object FileActor {
   sealed trait Data
   final case class Details(filename: String, description: String) extends Data
   final case class FileData(
-                             id: String,
-                             details: Details,
-                             streams: List[StreamDetails],
-                             outputFormats: List[Format],
-                             streamRef: ActorRef) extends Data
+      id: String,
+      details: Details,
+      streams: List[StreamDetails],
+      outputFormats: List[Format],
+      streamRef: ActorRef) extends Data
   final case class ConversionData(fileData: FileData, progress: ProgressDetails) extends Data
 
   def shardRegion(system: ActorSystem): ActorRef = ClusterSharding(system).start(
@@ -119,7 +119,6 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(Play, fileData: FileData) =>
       fileData.streamRef forward Play
       stay
-
   }
 
   when(Converting) {
@@ -127,8 +126,9 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       log.info("Conversion Completed.")
       goto(Ready).using(fileData)
     case Event(progressDetails: ProgressDetails, fileData: FileData) =>
-      log.info("Progress Details: {}", progressDetails)
-      stay.using(ConversionData(fileData, progressDetails))
+      logProgressAndStay(ConversionData(fileData, progressDetails))
+    case Event(progressDetails: ProgressDetails, conversionData: ConversionData) =>
+      logProgressAndStay(conversionData.copy(progress = progressDetails))
   }
 
   whenUnhandled {
@@ -148,6 +148,11 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     log.info(s"Data not ready for $action yet. Stashing the request for now.")
     stash()
     stay
+  }
+
+  private def logProgressAndStay(conversionData: ConversionData) = {
+    log.info("Progress Details: {}", conversionData.progress)
+    stay.using(conversionData)
   }
 
   initialize()

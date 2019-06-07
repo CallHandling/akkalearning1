@@ -22,7 +22,12 @@ object Converter {
       size: Long,
       speed: Double,
       timeMillis: Long,
-      percent: Float)
+      percent: Float) {
+    override def toString = {
+      val percentTwoDecimal = math.floor(percent * 100) / 100
+      s"$percentTwoDecimal% - ${super.toString}"
+    }
+  }
 
   def getOutputFormats(data: Array[Byte]) = {
     val mimeType = mimeTypeOf(data)
