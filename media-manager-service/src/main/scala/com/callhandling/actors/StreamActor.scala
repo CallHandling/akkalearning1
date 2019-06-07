@@ -22,11 +22,11 @@ object StreamActor {
   final case class StreamFailure(ex: Throwable)
 
   def createSink(
-      system: ActorSystem,
-      fileManagerRegion: ActorRef,
-      fileId: String,
-      filename: String)
-      (implicit timeout: Timeout) = {
+                  system: ActorSystem,
+                  fileManagerRegion: ActorRef,
+                  fileId: String,
+                  filename: String)
+                (implicit timeout: Timeout) = {
     val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream(system))
     val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
 

@@ -42,11 +42,11 @@ object FileActor {
   sealed trait Data
   final case class Details(filename: String, description: String) extends Data
   final case class FileData(
-      id: String,
-      details: Details,
-      streams: List[StreamDetails],
-      outputFormats: List[Format],
-      streamRef: ActorRef) extends Data
+                             id: String,
+                             details: Details,
+                             streams: List[StreamDetails],
+                             outputFormats: List[Format],
+                             streamRef: ActorRef) extends Data
   final case class ConversionData(fileData: FileData, progress: ProgressDetails) extends Data
 
   def shardRegion(system: ActorSystem): ActorRef = ClusterSharding(system).start(

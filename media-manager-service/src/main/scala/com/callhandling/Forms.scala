@@ -51,4 +51,14 @@ object Forms {
     }
   }
 
+  final case class FileIdForm(fileId: String)
+  object FileIdFormValidator extends Validator[FileIdForm] {
+    override def apply(model: FileIdForm): Seq[FieldErrorInfo] = {
+
+      val fileId: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "fileId", model.fileId)
+
+      (fileId :: Nil).flatten
+    }
+  }
+
 }
