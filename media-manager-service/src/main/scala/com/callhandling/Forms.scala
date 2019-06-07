@@ -1,6 +1,6 @@
 package com.callhandling
 
-import akka.http.scaladsl.server.{Rejection}
+import akka.http.scaladsl.server.Rejection
 
 
 final case class FieldErrorInfo(name: String, error: String)
@@ -14,16 +14,16 @@ trait Validator[T] extends (T => Seq[FieldErrorInfo]) {
 case class Validation[S](rule: S => Boolean, errorMessage: S => String)
 
 object ValidationUtils {
-  type StringValidator = String => Boolean
-  type ValidatorMessage = String => String
+  type StringRule = String => Boolean
+  type ErrorMessage = String => String
 
-  private def requiredRule: StringValidator = _.isEmpty
-  private def requiredMessage: ValidatorMessage = _ + " is required"
+  private def requiredRule: StringRule = _.isEmpty
+  private def requiredMessage: ErrorMessage = _ + " is required"
 
   def requiredValidation = Validation[String](requiredRule, requiredMessage)
 
-  private def minRule(limit: Int): StringValidator = _.length < limit
-  private def minMessage(limit: Int): ValidatorMessage = _ + s" minimum chars of $limit"
+  private def minRule(limit: Int): StringRule = _.length < limit
+  private def minMessage(limit: Int): ErrorMessage = _ + s" minimum chars of $limit"
   def minValidation(limit: Int) = Validation[String](minRule(limit), minMessage(limit))
 }
 
@@ -33,7 +33,8 @@ object Forms {
   object UploadFileFormValidator extends Validator[UploadFileForm] {
     override def apply(model: UploadFileForm): Seq[FieldErrorInfo] = {
 
-      val description: Option[FieldErrorInfo] = validation(ValidationUtils.minValidation(5), "fileId", model.description)
+      val description: Option[FieldErrorInfo] =
+        validation(ValidationUtils.minValidation(5), "fileId", model.description)
 
       (description :: Nil).flatten
     }

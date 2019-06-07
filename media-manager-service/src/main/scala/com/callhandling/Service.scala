@@ -2,28 +2,25 @@ package com.callhandling
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.model.HttpResponse
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
-import akka.http.scaladsl.model.{HttpResponse}
+import akka.http.scaladsl.server.Directives.{entity, _}
+import akka.http.scaladsl.server.{Directive1, RejectionHandler}
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Sink
 import akka.util.Timeout
+import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
 import com.callhandling.actors.{FileActor, StreamActor}
-import com.callhandling.actors.StreamActor.{Ack, StreamCompleted, StreamFailure, StreamInitialized}
 import com.callhandling.media.Converter.OutputDetails
+import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
-
-import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContextExecutor}
-import scala.io.StdIn
-import akka.http.scaladsl.server.Directives.{entity, _}
-import spray.json.{DefaultJsonProtocol, RootJsonFormat}
-import com.callhandling.media.DataType.Rational
 import com.callhandling.media.StreamDetails._
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.server.{Directive1, RejectionHandler}
-import com.callhandling.Forms.{ConvertFileForm,  UploadFileForm}
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
+
+import scala.concurrent.ExecutionContextExecutor
+import scala.io.StdIn
 
 object Service {
 
@@ -85,10 +82,9 @@ class Service(fileManagerRegion: ActorRef) (
     materializer: ActorMaterializer,
     timeout: Timeout) {
   import FileActor._
-  import Service._
-
-  import JsonSupport._
   import Forms._
+  import Service._
+  import JsonSupport._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
 

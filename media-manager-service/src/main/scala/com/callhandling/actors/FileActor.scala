@@ -1,16 +1,13 @@
 package com.callhandling.actors
 
-import java.nio.file.Path
-
 import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.callhandling.Forms.UploadFileForm
-import akka.util.ByteString
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.actors.StreamActor.{Ack, StreamInitialized}
+import com.callhandling.actors.StreamActor.StreamInitialized
 import com.callhandling.media.Converter.OutputDetails
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.{Converter, StreamDetails}
+import com.callhandling.media.StreamDetails
 
 object FileActor {
   val RegionName = "FileManager"

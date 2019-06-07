@@ -1,19 +1,12 @@
 package com.callhandling.actors
 
-import akka.actor.{Actor, ActorLogging}
-import akka.util.ByteString
-import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, EntityMessage, SetStreamInfo}
-import com.callhandling.media.{Converter, StreamDetails}
-import java.io.{ByteArrayInputStream, File}
-import java.nio.file.Files
-
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.cluster.sharding.ClusterSharding
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
-import com.callhandling.actors.FileActor._
+import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, EntityMessage, SetStreamInfo, _}
 import com.callhandling.media.{Converter, StreamDetails}
 
 import scala.concurrent.Await
