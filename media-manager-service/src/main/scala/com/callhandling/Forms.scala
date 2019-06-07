@@ -9,20 +9,17 @@ trait Validator[T] extends (T => Seq[FieldErrorInfo]) {
   protected def validation(validation: Validation[String], fieldName: String, field: String): Option[FieldErrorInfo] = {
     if(validation.rule(field)) Some(FieldErrorInfo(fieldName, validation.errorMessage(fieldName))) else None
   }
-  protected def validation2(validation: Validation[(String, Int)], fieldName: String, field: String, limit: Int): Option[FieldErrorInfo] = {
-    if(validation.rule((field, limit))) Some(FieldErrorInfo(fieldName, validation.errorMessage((fieldName, limit)))) else None
-  }
 }
 
 case class Validation[S](rule: S => Boolean, errorMessage: S => String)
 object ValidationUtils {
-  private def requiredRule(s: String) = if (s.nonEmpty) false else true
+  private def requiredRule: String => Boolean = _.isEmpty
   private def requiredMessage(fieldName: String) = fieldName + " is required"
   def requiredValidation = Validation[String](requiredRule, requiredMessage)
 
-  private def minRule(s: (String, Int)) = if (s._1.size >= s._2 ) false else true
-  private def minMessage(s: (String, Int)) = s._1 + " minimum chars of " + s._2
-  def minValidation = Validation[(String, Int)](minRule, minMessage)
+  private def minRule(limit: Int)(s: String) = s.length < limit
+  private def minMessage(limit: Int)(s: String) = s"$s minimum chars of $limit"
+  def minValidation(limit: Int) = Validation[String](minRule(limit), minMessage(limit))
 }
 
 object Forms {
@@ -31,7 +28,7 @@ object Forms {
   object UploadFileFormValidator extends Validator[UploadFileForm] {
     override def apply(model: UploadFileForm): Seq[FieldErrorInfo] = {
 
-      val description: Option[FieldErrorInfo] = validation2(ValidationUtils.minValidation, "fileId", model.description, 5)
+      val description: Option[FieldErrorInfo] = validation(ValidationUtils.minValidation(5), "fileId", model.description)
 
       (description :: Nil).flatten
     }
