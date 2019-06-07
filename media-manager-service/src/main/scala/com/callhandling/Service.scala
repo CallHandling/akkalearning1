@@ -123,22 +123,14 @@ class Service(fileManagerRegion: ActorRef) (
         put {
           fileUpload("file") {
             case (metadata, byteSource) =>
-              val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream)
-              val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
-
-              lazy val fileSink = Sink.actorRefWithAck(
-                streamActor,
-                onInitMessage = StreamInitialized(metadata.fileName),
-                ackMessage = Ack,
-                onCompleteMessage = StreamCompleted,
-                onFailureMessage = StreamFailure)
-
+              val fileSink = StreamActor.createSink(
+                system, fileManagerRegion, fileId, metadata.fileName)
               byteSource.runWith(fileSink)
 
               val fileDataF = fileManagerRegion ? EntityMessage(fileId, GetFileData)
               onSuccess(fileDataF) {
-                case FileData(id, details, streams, outputFormats, _) =>
-                  complete(UploadResult(id, details.filename, details.description, streams, outputFormats))
+                case FileData(id, Details(filename, description), streams, outputFormats, _) =>
+                  complete(UploadResult(id, filename, description, streams, outputFormats))
                 case _ => complete(internalError("Could not retrieve file data."))
               }
           }
@@ -151,16 +143,15 @@ class Service(fileManagerRegion: ActorRef) (
     pathEndOrSingleSlash {
       post {
         entity(as[ConvertFileForm]) { form =>
-          validateForm(form).apply {
-            f =>
-              val outputDetails = OutputDetails("converted", f.format)
-              val conversionF = fileManagerRegion ? EntityMessage(f.fileId, ConvertAndKeep(outputDetails))
+          validateForm(form).apply { f =>
+            val outputDetails = OutputDetails("converted", f.format)
+            val conversionF = fileManagerRegion ? EntityMessage(f.fileId, ConvertAndKeep(outputDetails))
 
-              onSuccess(conversionF) {
-                case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
-                case ConversionStarted(Right(newFileId)) =>
-                  complete(ConversionResult("Conversion Started", newFileId, outputDetails))
-              }
+            onSuccess(conversionF) {
+              case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
+              case ConversionStarted(Right(newFileId)) =>
+                complete(ConversionResult("Conversion Started", newFileId, outputDetails))
+            }
           }
         }
       }

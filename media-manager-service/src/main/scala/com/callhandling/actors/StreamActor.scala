@@ -2,7 +2,7 @@ package com.callhandling.actors
 
 import akka.actor.{Actor, ActorLogging}
 import akka.util.ByteString
-import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, EntityMessage, PrepareConversion, SetStreamInfo}
+import com.callhandling.actors.FileActor.{ConversionStarted, ConvertFile, EntityMessage, SetStreamInfo}
 import com.callhandling.media.{Converter, StreamDetails}
 import java.io.{ByteArrayInputStream, File}
 import java.nio.file.Files
@@ -31,14 +31,15 @@ object StreamActor {
   def createSink(
       system: ActorSystem,
       fileManagerRegion: ActorRef,
-      fileId: String)
+      fileId: String,
+      filename: String)
       (implicit timeout: Timeout) = {
     val streamActorF = fileManagerRegion ? EntityMessage(fileId, SetUpStream(system))
     val streamActor = Await.result(streamActorF, timeout.duration).asInstanceOf[ActorRef]
 
     Sink.actorRefWithAck(
       streamActor,
-      onInitMessage = StreamInitialized,
+      onInitMessage = StreamInitialized(filename),
       ackMessage = Ack,
       onCompleteMessage = StreamCompleted,
       onFailureMessage = StreamFailure)
@@ -49,7 +50,7 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
   import StreamActor._
 
   def receive(bytes: ByteString): Receive = {
-    case cmd @ StreamInitialized(_) =>
+    case cmd: StreamInitialized =>
       log.info("Stream Initialized")
 
       // Inform the parent that the stream has successfully
@@ -87,7 +88,7 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
           val region = ClusterSharding(system).shardRegion(FileActor.RegionName)
           implicit val timeout: Timeout = 2.seconds
 
-          val fileSink = createSink(system, region, newFileId)
+          val fileSink = createSink(system, region, newFileId, fileData.details.filename)
           Source.single(bytes).runWith(fileSink)(ActorMaterializer())
 
           region ! EntityMessage(

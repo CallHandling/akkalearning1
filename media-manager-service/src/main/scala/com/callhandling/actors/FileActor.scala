@@ -28,6 +28,7 @@ object FileActor {
   case object Converting extends State
 
   // Events
+  final case class SetDetails(id: String, details: Details)
   final case class SetFormDetails(id: String, uploadFileForm: UploadFileForm)
   final case class SetUpStream(system: ActorSystem)
   final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
@@ -119,6 +120,8 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       val updated = fileData.copy(id = id, details = Details(fileData.details.filename, form.description))
       sender() ! updated
       stay.using(updated)
+    case Event(SetDetails(id, details), fileData: FileData) =>
+      stay.using(fileData.copy(details = details))
     case Event(GetFileData, _) =>
       stashAndStay("retrieval")
     case Event(_: ConvertFile, _) | Event(ConvertAndKeep(_), _) =>
