@@ -1,4 +1,4 @@
-package com.callhandling
+package com.callhandling.media
 
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}

@@ -1,4 +1,4 @@
-package com.callhandling.streams
+package com.callhandling.media.streams
 
 import com.callhandling.media.OutputFormat
 
