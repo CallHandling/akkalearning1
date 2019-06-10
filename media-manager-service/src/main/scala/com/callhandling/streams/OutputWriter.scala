@@ -2,12 +2,12 @@ package com.callhandling.streams
 
 import com.callhandling.media.OutputFormat
 
-trait OutputStreamWriter[W] {
+trait OutputWriter[W] {
   def write(writer: W, id: String, outputFormat: OutputFormat): OutputStream
 }
 
-object OutputStreamWriter {
+object OutputWriter {
   def write[W](writer: W, id: String, outputFormat: OutputFormat)
-      (implicit outputWriter: OutputStreamWriter[W]): OutputStream =
+      (implicit outputWriter: OutputWriter[W]): OutputStream =
     outputWriter.write(writer, id, outputFormat)
 }
