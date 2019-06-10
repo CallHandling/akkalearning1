@@ -4,24 +4,20 @@ import java.io.File
 import java.nio.file.Files
 
 import akka.util.ByteString
-import com.callhandling.media.DataType.Rational
 import com.callhandling.media.StreamDetails._
 import com.callhandling.util.FileUtil
 import com.github.kokorin.jaffree.ffmpeg.FFmpeg
 import com.github.kokorin.jaffree.ffprobe.{FFprobe, Stream}
 import com.github.kokorin.jaffree.{Rational => JRational}
+import com.callhandling.media.Rational
 
 import scala.collection.JavaConverters._
 
-object DataType {
-  final case class Rational(numerator: Long, denominator: Long)
-
+object StreamDetails {
   implicit def jRationalToRational(jRational: JRational): Option[Rational] =
     Option(jRational).map(rational =>
       Rational(rational.numerator, rational.denominator))
-}
 
-object StreamDetails {
   def extractFrom(data: ByteString): List[StreamDetails] = {
     val path = FileUtil.writeToTempAndGetPath(data)
 
