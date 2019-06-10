@@ -1,7 +1,7 @@
 package com.callhandling.media
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 
 import akka.util.ByteString
 import com.callhandling.util.FileUtil
@@ -30,9 +30,17 @@ object Converter {
   }
   case object EmptyProgress
 
-  def getOutputFormats(data: Array[Byte]) = {
-    val mimeType = mimeTypeOf(data)
+  def getOutputFormats(data: Array[Byte]): List[Formats.Format] = {
+    val mimeType = new Tika().detect(data)
+    getOutputFormats(mimeType)
+  }
 
+  def getOutputFormats(path: Path): List[Formats.Format] = {
+    val mimeType = new Tika().detect(path)
+    getOutputFormats(mimeType)
+  }
+
+  def getOutputFormats(mimeType: String): List[Formats.Format] = {
     if (isAudio(mimeType)) Formats.Audios.all
     else if (isVideo(mimeType)) Formats.Videos.all
     else Nil
@@ -41,8 +49,6 @@ object Converter {
   def isAudio: MimeDetector = _.startsWith("audio")
   def isVideo: MimeDetector = _.startsWith("video")
   def isSupportedMimeType: MimeDetector = mime => isAudio(mime) || isVideo(mime)
-
-  def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
   def convert(bytes: ByteString, timeDuration: Float, outputDetails: OutputDetails)
       (f: ProgressDetails => Unit): ByteString = outputDetails match {

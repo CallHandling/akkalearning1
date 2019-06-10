@@ -4,6 +4,7 @@ ThisBuild / organization := "com.callhandling"
 
 lazy val v = new {
   val akka = "2.5.22"
+  val akkaHttp = "10.1.8"
   val akkaTyped = "2.5.8"
   val scalatest = "3.0.7"
   val junit = "4.12"
@@ -22,17 +23,26 @@ lazy val `media-manager-service` = project
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % v.scalatest % Test,
 
-      "com.typesafe.akka" %% "akka-http"   % "10.1.8",
-      "com.typesafe.akka" %% "akka-stream" % "2.5.19",
-      "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.8",
-      "org.typelevel" %% "cats-core" % "1.6.1",
-
+      "com.typesafe.akka" %% "akka-actor" % v.akka,
+      "com.typesafe.akka" %% "akka-stream" % v.akka,
+      "com.typesafe.akka" %% "akka-http"   % v.akkaHttp,
+      "com.typesafe.akka" %% "akka-http-spray-json" % v.akkaHttp,
 
       "com.github.kokorin.jaffree" % "jaffree" % "0.8.3",
 
       "org.slf4j" % "slf4j-api" % "1.7.25",
 
-      "org.apache.tika" % "tika-core" % "1.21"
+      "org.apache.tika" % "tika-core" % "1.21",
+
+      "com.typesafe.akka" %% "akka-actor-typed" % v.akka,
+      "com.typesafe.akka" %% "akka-stream-typed" % v.akka,
+      "com.typesafe.akka" %% "akka-cluster-typed" % v.akka,
+      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % v.akka,
+      "com.typesafe.akka" %% "akka-persistence-typed" % v.akka,
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % v.cassandraPlugin,
+      // this allows us to start cassandra from the sample
+      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
+      
     )
   )
 
