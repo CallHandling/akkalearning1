@@ -1,4 +1,4 @@
-package com.callhandling.streams
+package com.callhandling.media.streams
 
 trait InputReader[R] {
   def read(reader: R, id: String): InputStream
