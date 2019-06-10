@@ -3,18 +3,19 @@ package com.callhandling.media.processor
 import akka.actor.{ActorLogging, ActorRef, FSM, Props}
 import com.callhandling.media.OutputFormat
 import com.callhandling.media.processor.AudioProcessor._
+import com.callhandling.media.processor.Worker.Convert
 import com.callhandling.media.streams.{InputReader, OutputWriter}
 
 object AudioProcessor {
-  def props[R, W](
+  def props[I, O](
       id: String,
       outputFormats: List[OutputFormat],
-      reader: R,
-      writer: W,
+      input: I,
+      output: O,
       ackActorRef: ActorRef)
-      (implicit inputStream: InputReader[R], outputWriter: OutputWriter[W]): Props =
-    Props(new AudioProcessor[R, W](
-      id, outputFormats, reader, writer, ackActorRef))
+      (implicit reader: InputReader[I], writer: OutputWriter[O]): Props =
+    Props(new AudioProcessor[I, O](
+      id, outputFormats, input, output, ackActorRef))
 
   // FSM States
   sealed trait ConversionStatus
@@ -30,7 +31,7 @@ object AudioProcessor {
   // FSM Data
   sealed trait Data
   case object EmptyData extends Data
-  final case class NonEmptyData[A](conversionDataSet: List[Conversion]) extends Data
+  final case class NonEmptyData[A](conversionSet: List[Conversion]) extends Data
 
   final case class Conversion(
       outputFormat: OutputFormat,
@@ -50,29 +51,38 @@ object AudioProcessor {
   final case class FileConversionStatus(id: String, conversionStatus: ConversionStatus)
 }
 
-class AudioProcessor[R, W](
+class AudioProcessor[I, O](
     id: String,
     outputFormats: List[OutputFormat],
-    reader: R,
-    writer: W,
+    input: I,
+    output: O,
     ackActorRef: ActorRef)
-    (implicit inputReader: InputReader[R], outputWriter: OutputWriter[W])
+    (implicit reader: InputReader[I], writer: OutputWriter[O])
     extends FSM[ConversionStatus, Data] with ActorLogging {
+  lazy val inputStream = InputReader.read(input, id)
+
   startWith(Ready, EmptyData)
 
   when(Ready) {
-    case Event(StartConversion(redo), data @ NonEmptyData(conversionDataSet)) =>
-      val pendingFormats = conversionDataSet.filter {
+    case Event(StartConversion(redo), data @ NonEmptyData(conversionSet)) =>
+      def isPending: Conversion => Boolean = {
         case Conversion(_, Ready, _) => true
         case Conversion(_, Failed(_), _) => redo
         case _ => false
       }
 
-      // TODO: perform conversion here
-      // Create workers if they do not exist yet.
+      val pendingFormats = conversionSet.filter(isPending)
 
-      goto(Converting).using(data.copy(conversionDataSet = conversionDataSet.map {
-        _.copy(status = Converting)
+      pendingFormats.foreach { case Conversion(format, status, workerOption) =>
+        val worker = workerOption.getOrElse {
+          context.actorOf(Worker.props(id, inputStream, output, format))
+        }
+        worker ! Convert
+      }
+
+      goto(Converting).using(data.copy(conversionSet = conversionSet.map { conversion =>
+        if (isPending(conversion)) conversion.copy(status = Converting)
+        else conversion
       }))
   }
 
