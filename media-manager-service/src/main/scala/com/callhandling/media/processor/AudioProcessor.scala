@@ -6,14 +6,15 @@ import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.streams.{InputReader, OutputWriter}
 
 object AudioProcessor {
-  def props[A](
+  def props[R, W](
       id: String,
       outputFormats: List[OutputFormat],
-      inputReader: InputReader[A],
-      outputWriter: OutputWriter[A],
-      ackActorRef: ActorRef): Props =
-    Props(new AudioProcessor[A](
-      id, outputFormats, inputReader, outputWriter, ackActorRef))
+      reader: R,
+      writer: W,
+      ackActorRef: ActorRef)
+      (implicit inputStream: InputReader[R], outputWriter: OutputWriter[W]): Props =
+    Props(new AudioProcessor[R, W](
+      id, outputFormats, reader, writer, ackActorRef))
 
   // FSM States
   sealed trait ConversionStatus
@@ -49,12 +50,14 @@ object AudioProcessor {
   final case class FileConversionStatus(id: String, conversionStatus: ConversionStatus)
 }
 
-class AudioProcessor[A](
+class AudioProcessor[R, W](
     id: String,
     outputFormats: List[OutputFormat],
-    inputReader: InputReader[A],
-    outputWriter: OutputWriter[A],
-    ackActorRef: ActorRef) extends FSM[ConversionStatus, Data] with ActorLogging {
+    reader: R,
+    writer: W,
+    ackActorRef: ActorRef)
+    (implicit inputReader: InputReader[R], outputWriter: OutputWriter[W])
+    extends FSM[ConversionStatus, Data] with ActorLogging {
   startWith(Ready, EmptyData)
 
   when(Ready) {
