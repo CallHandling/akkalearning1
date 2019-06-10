@@ -54,7 +54,7 @@ object FileActor {
   sealed trait Data
   final case class Details(filename: String, description: String) extends Data
   final case class FileData(
-      id: String,
+      id: String,   // TODO: remove this. We can keep this in the props params.
       details: Details,
       streams: List[StreamDetails],
       outputFormats: List[Format],

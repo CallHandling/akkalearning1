@@ -19,8 +19,12 @@ object AudioProcessor {
   sealed trait ConversionStatus
   case object Ready extends ConversionStatus
   case object Success extends ConversionStatus
-  final case class Failed(message: String) extends AnyVal with ConversionStatus
+  final case class Failed(reason: ErrorCode) extends AnyVal with ConversionStatus
   case object Converting extends ConversionStatus
+
+  sealed trait ErrorCode {
+    def combine(error: ErrorCode): ErrorCode
+  }
 
   // FSM Data
   sealed trait Data
@@ -73,7 +77,7 @@ class AudioProcessor[A](
     case Event(FormatConversionStatus(format, status), NonEmptyData(conversionDataSet)) =>
       val newConversionDataSet = conversionDataSet.map {
         case conversion @ Conversion(`format`, _, _) => conversion.copy(status = status)
-        case _ => conversionDataSet
+        case conversion => conversion
       }
 
       val remaining = conversionDataSet.filter {
@@ -84,11 +88,15 @@ class AudioProcessor[A](
 
       if (remaining.isEmpty) {
         val conversionStatus = conversionDataSet.foldLeft[ConversionStatus](Ready) {
-          case (fail @ Failed(_), _) => fail
-          case
+          case (Failed(accErrorCode), Conversion(_, Failed(errorCode), _)) =>
+            Failed(accErrorCode combine errorCode)
+          case (_, Conversion(_, failed @ Failed(_), _)) => failed
+          case (accStatus, Conversion(_, Success, _)) => accStatus
         }
-        ackActorRef ! FileConversionStatus(id, ???)
+        ackActorRef ! FileConversionStatus(id, conversionStatus)
       }
+
+      goto(Ready).using(NonEmptyData(newConversionDataSet))
   }
 
   initialize()
