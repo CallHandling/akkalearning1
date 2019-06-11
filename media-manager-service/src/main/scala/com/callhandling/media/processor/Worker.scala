@@ -12,7 +12,7 @@ object Worker {
       output: O,
       outputFormat: OutputFormat)
       (implicit writer: OutputWriter[O, SI]): Props =
-    Props(new Worker[O](id, inputStream, output, outputFormat))
+    Props(new Worker[O, SO, SM, SI](id, inputStream, output, outputFormat))
 
   case object Convert
 }
