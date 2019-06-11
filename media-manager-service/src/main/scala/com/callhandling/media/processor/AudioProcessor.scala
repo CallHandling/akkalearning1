@@ -1,21 +1,22 @@
 package com.callhandling.media.processor
 
+import akka.NotUsed
 import akka.actor.{ActorLogging, ActorRef, FSM, Props}
+import akka.util.ByteString
 import com.callhandling.media.OutputFormat
 import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
-import com.callhandling.media.streams.{InputReader, OutputWriter}
+import com.callhandling.media.io.{InputReader, OutputWriter}
 
 object AudioProcessor {
-  def props[I, O](
+  def props[I, O, SO, SM, SI](
       id: String,
       outputFormats: List[OutputFormat],
       input: I,
       output: O,
       ackActorRef: ActorRef)
-      (implicit reader: InputReader[I], writer: OutputWriter[O]): Props =
-    Props(new AudioProcessor[I, O](
-      id, outputFormats, input, output, ackActorRef))
+      (implicit reader: InputReader[I, SO, SM], writer: OutputWriter[O, SI]): Props =
+    Props(new AudioProcessor(id, outputFormats, input, output, ackActorRef))
 
   // FSM States
   sealed trait ConversionStatus
@@ -51,13 +52,13 @@ object AudioProcessor {
   final case class FileConversionStatus(id: String, conversionStatus: ConversionStatus)
 }
 
-class AudioProcessor[I, O](
+class AudioProcessor[I, O, SO, SM, SI](
     id: String,
     outputFormats: List[OutputFormat],
     input: I,
     output: O,
     ackActorRef: ActorRef)
-    (implicit reader: InputReader[I], writer: OutputWriter[O])
+    (implicit reader: InputReader[I, SO, SM], writer: OutputWriter[O, SI])
     extends FSM[ConversionStatus, Data] with ActorLogging {
   lazy val inputStream = InputReader.read(input, id)
 
