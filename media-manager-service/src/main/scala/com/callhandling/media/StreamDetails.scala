@@ -1,15 +1,8 @@
 package com.callhandling.media
 
-import java.io.File
-import java.nio.file.Files
-
-import akka.util.ByteString
 import com.callhandling.media.StreamDetails._
-import com.callhandling.util.FileUtil
-import com.github.kokorin.jaffree.ffmpeg.FFmpeg
 import com.github.kokorin.jaffree.ffprobe.{FFprobe, Stream}
 import com.github.kokorin.jaffree.{Rational => JRational}
-import com.callhandling.media.Rational
 
 import scala.collection.JavaConverters._
 
@@ -18,9 +11,7 @@ object StreamDetails {
     Option(jRational).map(rational =>
       Rational(rational.numerator, rational.denominator))
 
-  def extractFrom(data: ByteString): List[StreamDetails] = {
-    val path = FileUtil.writeToTempAndGetPath(data)
-
+  def extractFrom(path: String): List[StreamDetails] = {
     val result = FFprobe.atPath(FFmpegConf.Bin)
       .setInput(path)
       .setShowStreams(true)

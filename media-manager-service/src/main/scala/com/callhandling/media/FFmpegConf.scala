@@ -6,7 +6,7 @@ import java.nio.file.Paths
 object FFmpegConf {
   lazy val Bin = Paths.get("/usr/bin/")
 
-  lazy val StorageDir = {
+  lazy val StorageDir: String = {
     // get the temporary directory
     val tmpDir = System.getProperty("java.io.tmpdir")
 

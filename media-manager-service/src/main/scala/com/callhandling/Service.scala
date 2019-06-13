@@ -1,5 +1,7 @@
 package com.callhandling
 
+import java.io.InputStream
+
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
@@ -9,13 +11,12 @@ import akka.http.scaladsl.server.Directives.{entity, _}
 import akka.http.scaladsl.server.{Directive1, RejectionHandler}
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.StreamConverters
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms._
 import com.callhandling.actors.{FileActor, StreamActor}
-import com.callhandling.media.Converter.{OutputDetails, ProgressDetails}
-import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.StreamDetails
+import com.callhandling.media.{Rational, StreamDetails}
 import com.callhandling.media.StreamDetails._
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 

@@ -5,7 +5,6 @@ import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardReg
 import com.callhandling.Forms.UploadFileForm
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
-import com.callhandling.media.Converter.{EmptyProgress, OutputDetails, ProgressDetails}
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
 
