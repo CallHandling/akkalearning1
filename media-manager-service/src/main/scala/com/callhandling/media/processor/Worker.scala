@@ -1,31 +1,38 @@
 package com.callhandling.media.processor
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.{Actor, Props}
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Sink, Source, StreamConverters}
+import akka.util.{ByteString, Timeout}
 import com.callhandling.media.OutputFormat
 import com.callhandling.media.processor.Worker.Convert
-import com.callhandling.media.io.{InputReader, InputStream, OutputWriter}
+import com.callhandling.media.io.{InputReader, InputBytes, OutputBytes, OutputWriter}
+
+import scala.concurrent.duration.FiniteDuration
 
 object Worker {
-  def props[O, SO, SM, SI](
+  def props[SM](
       id: String,
-      inputStream: InputStream[SO, SM],
-      output: O,
+      inputBytes: InputBytes[SM],
+      outputBytes: OutputBytes,
       outputFormat: OutputFormat)
-      (implicit writer: OutputWriter[O, SI]): Props =
-    Props(new Worker[O, SO, SM, SI](id, inputStream, output, outputFormat))
+      (implicit materializer: ActorMaterializer): Props =
+    Props(new Worker[SM](id, inputBytes, outputBytes, outputFormat))
 
   case object Convert
 }
 
-class Worker[O, SO, SM, SI](
+class Worker[SM](
     id: String,
-    inputStream: InputStream[SO, SM],
-    output: O,
+    inputBytes: InputBytes[SM],
+    outputBytes: OutputBytes,
     outputFormat: OutputFormat)
-    (implicit writer: OutputWriter[O, SI]) extends Actor {
+    (implicit materializer: ActorMaterializer) extends Actor {
   override def receive = {
     case Convert =>
-      val outputStream = writer.write(output, id, outputFormat)
-
+      val inputStream = inputBytes.runWith(StreamConverters.asInputStream())
+      inputStream.convert()
   }
 }

@@ -7,7 +7,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
 import com.callhandling.actors.FileActor.{ConversionStarted, Convert, SendToEntity, SetStreamInfo, _}
-import com.callhandling.media.{Converter, StreamDetails}
+import com.callhandling.media.StreamDetails
 
 import scala.concurrent.Await
 import scala.concurrent.duration._

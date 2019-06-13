@@ -17,10 +17,9 @@ import akka.stream.scaladsl.{FileIO, Source, StreamConverters}
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms._
 import com.callhandling.actors.{FileActor, StreamActor}
-import com.callhandling.media.Converter.{OutputDetails, ProgressDetails}
-import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.{FFmpegConf, StreamDetails}
+import com.callhandling.media.{Rational, StreamDetails}
 import com.callhandling.media.StreamDetails._
 import com.callhandling.typed.cluster.ActorSharding
 import com.callhandling.typed.persistence.{AddFile, AddFileCommand, AddFormCommand, ConvertFileCommand, FileListActor, FilePipeline, GetFile, GetFileCommand, UploadedFile}

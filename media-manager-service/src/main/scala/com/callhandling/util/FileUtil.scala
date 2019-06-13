@@ -7,14 +7,13 @@ import akka.util.ByteString
 import com.callhandling.media.FFmpegConf
 
 object FileUtil {
-  def writeToTempAndGetPath(data: Array[Byte]) = {
+  @deprecated("We may not use this method anymore")
+  def writeToTempAndGetPath(data: ByteString): Path = {
     val uuid = java.util.UUID.randomUUID().toString
     val path = new File(s"${FFmpegConf.StorageDir}/$uuid").toPath
 
-    Files.write(path, data)
+    Files.write(path, data.toArray)
 
     path
   }
-
-  def writeToTempAndGetPath(data: ByteString): Path = writeToTempAndGetPath(data.toArray)
 }

@@ -9,20 +9,20 @@ import com.callhandling.media.processor.Worker.Convert
 import com.callhandling.media.io.{InputReader, OutputWriter}
 
 object AudioProcessor {
-  def props[I, O, SO, SM, SI](
+  def props[I, O, SM](
       id: String,
       outputFormats: List[OutputFormat],
       input: I,
       output: O,
       ackActorRef: ActorRef)
-      (implicit reader: InputReader[I, SO, SM], writer: OutputWriter[O, SI]): Props =
+      (implicit reader: InputReader[I, SM], writer: OutputWriter[O]): Props =
     Props(new AudioProcessor(id, outputFormats, input, output, ackActorRef))
 
   // FSM States
   sealed trait ConversionStatus
   case object Ready extends ConversionStatus
   case object Success extends ConversionStatus
-  final case class Failed(reason: ErrorCode) extends AnyVal with ConversionStatus
+  final case class Failed(reason: ErrorCode) extends ConversionStatus
   case object Converting extends ConversionStatus
 
   sealed trait ErrorCode {
@@ -52,13 +52,13 @@ object AudioProcessor {
   final case class FileConversionStatus(id: String, conversionStatus: ConversionStatus)
 }
 
-class AudioProcessor[I, O, SO, SM, SI](
+class AudioProcessor[I, O, SM](
     id: String,
     outputFormats: List[OutputFormat],
     input: I,
     output: O,
     ackActorRef: ActorRef)
-    (implicit reader: InputReader[I, SO, SM], writer: OutputWriter[O, SI])
+    (implicit reader: InputReader[I, SM], writer: OutputWriter[O])
     extends FSM[ConversionStatus, Data] with ActorLogging {
   lazy val inputStream = InputReader.read(input, id)
 
