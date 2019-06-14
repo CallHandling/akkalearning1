@@ -1,9 +1,8 @@
 package com.callhandling.media.processor
 
-import akka.actor.{Actor, ActorLogging, PoisonPill, Props}
+import akka.actor.{Actor, PoisonPill, Props}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.StreamConverters
-import com.callhandling.media.StreamDetails.Streams
 import com.callhandling.media.converters._
 import com.callhandling.media.io.{BytesInlet, OutputWriter}
 import com.callhandling.media.processor.AudioProcessor.{Failed, Success}

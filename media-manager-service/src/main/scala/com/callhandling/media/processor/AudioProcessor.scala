@@ -59,26 +59,9 @@ class AudioProcessor[I, O, SM](
   startWith(Ready, EmptyData)
 
   when(Ready) {
+    case Event(StartConversion(_), EmptyData) =>
+      goto(Converting).using(NonEmptyData(outputArgsSet map convertFormat))
     case Event(StartConversion(redo), data @ NonEmptyData(conversionSet)) =>
-      def convertFormat(outputArgs: OutputArgs) = {
-        implicit val materializer: ActorMaterializer = ActorMaterializer()
-        implicit class OptionToEither[S](option: Option[S]) {
-          def toEither[E](alternative: => E): Either[E, S] =
-            option.map(Right(_)) getOrElse Left(alternative)
-        }
-
-        val conversionResult = for {
-          mediaStream <- mediaStreams.headOption.toEither(NoMediaStreamAvailable)
-          timeDuration <- mediaStream.time.duration.toEither(StreamInfoIncomplete)
-          worker = context.actorOf(Worker.props(id, inlet, output))
-        } yield worker ! Convert(outputArgs, timeDuration)
-
-        Conversion(outputArgs, conversionResult match {
-          case Left(error) => Failed(error)
-          case Right(_) => Success
-        })
-      }
-
       val convertedFormats = conversionSet.map {
         case Conversion(outputArgs, Ready) => convertFormat(outputArgs)
         case Conversion(outputArgs, Failed(_)) if redo => convertFormat(outputArgs)
@@ -121,6 +104,25 @@ class AudioProcessor[I, O, SM](
     case Event(progressDetails: ProgressDetails, _) =>
       ackActorRef ! progressDetails
       stay
+  }
+
+  def convertFormat(outputArgs: OutputArgs) = {
+    implicit val materializer: ActorMaterializer = ActorMaterializer()
+    implicit class OptionToEither[S](option: Option[S]) {
+      def toEither[E](alternative: => E): Either[E, S] =
+        option.map(Right(_)) getOrElse Left(alternative)
+    }
+
+    val conversionResult = for {
+      mediaStream <- mediaStreams.headOption.toEither(NoMediaStreamAvailable)
+      timeDuration <- mediaStream.time.duration.toEither(StreamInfoIncomplete)
+      worker = context.actorOf(Worker.props(id, inlet, output))
+    } yield worker ! Convert(outputArgs, timeDuration)
+
+    Conversion(outputArgs, conversionResult match {
+      case Left(error) => Failed(error)
+      case Right(_) => Converting
+    })
   }
 
   initialize()
