@@ -1,15 +1,9 @@
 package com.callhandling
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, File, FileInputStream}
-import java.net.URL
-
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.callhandling.actors.FileActor
-import com.github.kokorin.jaffree.{LogLevel, StreamType}
-import com.github.kokorin.jaffree.ffmpeg.UrlOutput
-import com.github.kokorin.jaffree.ffprobe.FFprobe
 
 import scala.concurrent.duration._
 
