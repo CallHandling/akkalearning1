@@ -12,6 +12,7 @@ import com.callhandling.media.StreamDetails
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
+@deprecated
 object StreamActor {
   def props(system: ActorSystem): Props = Props(StreamActor(system))
 
@@ -39,6 +40,7 @@ object StreamActor {
   }
 }
 
+@deprecated
 case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
   import StreamActor._
 

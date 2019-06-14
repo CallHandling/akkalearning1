@@ -11,7 +11,6 @@ import com.callhandling.media.converters._
 
 object FileActor {
   val RegionName = "FileManager"
-  val NumberOfShards = 50
 
   def props: Props = Props[FileActor]
 
@@ -41,15 +40,6 @@ object FileActor {
   // Non-command messages
   final case class ConversionStarted(either: Either[String, String])
 
-  /**
-    * Send this message to the shard region as opposed to the entity itself.
-    * The shard region will find the entity, or create one if it doesn't exist,
-    * and forward the message to it.
-    * @param id The ID of the entity.
-    * @param message The message the shard region will send to the entity.
-    */
-  final case class SendToEntity(id: String, message: Any)
-
   // Data
   sealed trait Data
   final case class Details(filename: String, description: String) extends Data
@@ -60,21 +50,6 @@ object FileActor {
       outputFormats: List[Format],
       streamRef: ActorRef) extends Data
   final case class ConversionData(fileData: FileData, progress: ProgressDetails) extends Data
-
-  def shardRegion(system: ActorSystem): ActorRef = ClusterSharding(system).start(
-    typeName = RegionName,
-    entityProps = Props[FileActor],
-    settings = ClusterShardingSettings(system),
-    extractEntityId = extractEntityId,
-    extractShardId = extractShardId)
-
-  val extractEntityId: ShardRegion.ExtractEntityId = {
-    case SendToEntity(id, message) => (id, message)
-  }
-
-  val extractShardId: ShardRegion.ExtractShardId = {
-    case SendToEntity(id, _) => (id.hashCode % NumberOfShards).toString
-  }
 }
 
 class FileActor extends FSM[State, Data] with Stash with ActorLogging {
