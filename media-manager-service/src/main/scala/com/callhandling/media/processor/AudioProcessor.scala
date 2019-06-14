@@ -109,13 +109,13 @@ class AudioProcessor[I, O, SM](
   def convertFormat(outputArgs: OutputArgs) = {
     implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit class OptionToEither[S](option: Option[S]) {
-      def toEither[E](alternative: => E): Either[E, S] =
+      def orError[E](alternative: => E): Either[E, S] =
         option.map(Right(_)) getOrElse Left(alternative)
     }
 
     val conversionResult = for {
-      mediaStream <- mediaStreams.headOption.toEither(NoMediaStreamAvailable)
-      timeDuration <- mediaStream.time.duration.toEither(StreamInfoIncomplete)
+      mediaStream <- mediaStreams.headOption.orError(NoMediaStreamAvailable)
+      timeDuration <- mediaStream.time.duration.orError(StreamInfoIncomplete)
       worker = context.actorOf(Worker.props(id, inlet, output))
     } yield worker ! Convert(outputArgs, timeDuration)
 
