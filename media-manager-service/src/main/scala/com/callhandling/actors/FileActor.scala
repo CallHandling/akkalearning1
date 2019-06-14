@@ -7,6 +7,7 @@ import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.actors.StreamActor.StreamInitialized
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
+import com.callhandling.media.converters._
 
 object FileActor {
   val RegionName = "FileManager"
@@ -32,8 +33,8 @@ object FileActor {
   case object Play
 
   // Conversion Messages/Events
-  final case class RequestForConversion(outputDetails: OutputDetails)
-  final case class Convert(outputDetails: OutputDetails, timeDuration: Float)
+  final case class RequestForConversion(outputArgs: OutputArgs)
+  final case class Convert(outputArgs: OutputArgs, timeDuration: Float)
   case object CompleteConversion
   case object GetConversionStatus
 
@@ -101,7 +102,7 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(GetFileData, fileData: FileData) =>
       sender() ! fileData
       stay
-    case Event(msg @ RequestForConversion(OutputDetails(filename, _)), fileData: FileData) =>
+    case Event(msg @ RequestForConversion(OutputArgs(filename, _)), fileData: FileData) =>
       log.info("Preparing for conversion...")
 
       // The details to be sent should be updated according to the output details
