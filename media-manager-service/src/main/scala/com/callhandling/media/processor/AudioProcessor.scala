@@ -11,12 +11,12 @@ import com.callhandling.media.processor.Worker.Convert
 object AudioProcessor {
   def props[I, O, SM](
       id: String,
-      outputDetails: List[OutputArgs],
+      outputArgsSet: List[OutputArgs],
       input: I,
       output: O,
       ackActorRef: ActorRef)
       (implicit reader: InputReader[I, SM], writer: OutputWriter[O]): Props =
-    Props(new AudioProcessor(id, outputDetails, input, output, ackActorRef))
+    Props(new AudioProcessor(id, outputArgsSet, input, output, ackActorRef))
 
   // FSM States
   sealed trait ConversionStatus
