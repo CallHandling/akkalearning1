@@ -1,38 +1,38 @@
 package com.callhandling.media.processor
 
-import java.util.concurrent.TimeUnit
-
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, ActorLogging, PoisonPill, Props}
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Sink, Source, StreamConverters}
-import akka.util.{ByteString, Timeout}
-import com.callhandling.media.OutputFormat
+import akka.stream.scaladsl.StreamConverters
+import com.callhandling.media.StreamDetails.Streams
+import com.callhandling.media.converters._
+import com.callhandling.media.io.{BytesInlet, OutputWriter}
+import com.callhandling.media.processor.AudioProcessor.{Failed, Success}
 import com.callhandling.media.processor.Worker.Convert
-import com.callhandling.media.io.{InputReader, InputBytes, OutputBytes, OutputWriter}
-
-import scala.concurrent.duration.FiniteDuration
 
 object Worker {
-  def props[SM](
-      id: String,
-      inputBytes: InputBytes[SM],
-      outputBytes: OutputBytes,
-      outputFormat: OutputFormat)
-      (implicit materializer: ActorMaterializer): Props =
-    Props(new Worker[SM](id, inputBytes, outputBytes, outputFormat))
+  def props[O, SM](id: String, inlet: BytesInlet[SM], output: O)
+      (implicit outputWriter: OutputWriter[O], materializer: ActorMaterializer): Props =
+    Props(new Worker[O, SM](id, inlet, output))
 
-  case object Convert
+  final case class Convert(outputArgs: OutputArgs, timeDuration: Float)
 }
 
-class Worker[SM](
-    id: String,
-    inputBytes: InputBytes[SM],
-    outputBytes: OutputBytes,
-    outputFormat: OutputFormat)
-    (implicit materializer: ActorMaterializer) extends Actor {
+class Worker[O, SM](id: String, inlet: BytesInlet[SM], output: O)
+    (implicit outputWriter: OutputWriter[O], materializer: ActorMaterializer) extends Actor {
   override def receive = {
-    case Convert =>
-      val inputStream = inputBytes.runWith(StreamConverters.asInputStream())
-      inputStream.convert()
+    case Convert(outputArgs, timeDuration) =>
+      val outlet = outputWriter.write(output, id, outputArgs.format)
+      val inputStream = inlet.runWith(StreamConverters.asInputStream())
+      val outletStream = StreamConverters.asOutputStream()
+
+      outletStream.toMat(outlet) { (outputStream, _) =>
+        val conversionError = inputStream.convert(outputStream, timeDuration, outputArgs) { progress =>
+          context.parent ! progress
+        }
+
+        context.parent ! (conversionError map Failed getOrElse Success)
+      }
+
+      self ! PoisonPill
   }
 }
