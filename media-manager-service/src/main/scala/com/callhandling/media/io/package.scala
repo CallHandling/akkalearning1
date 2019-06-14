@@ -5,6 +5,6 @@ import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
 
 package object io {
-  type InputBytes[SM] = Source[ByteString, SM]
-  type OutputBytes = Sink[ByteString, ActorMaterializer]
+  type BytesInlet[SM] = Source[ByteString, SM]
+  type BytesOutlet = Sink[ByteString, ActorMaterializer]
 }

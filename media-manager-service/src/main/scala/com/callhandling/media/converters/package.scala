@@ -8,7 +8,7 @@ import org.apache.tika.Tika
 package object converters {
   type MimeDetector = String => Boolean
 
-  case class OutputDetails(filename: String, format: String)
+  case class OutputArgs(filename: String, format: String)
   case class ProgressDetails(
       bitRate: Double,
       drop: Long,
@@ -42,9 +42,9 @@ package object converters {
   def mimeTypeOf: Array[Byte] => String = new Tika().detect
 
   implicit class InputStreamConverter(inputStream: InputStream) {
-    def convert(timeDuration: Float, outputDetails: OutputDetails)
-      (f: ProgressDetails => Unit): OutputStream = outputDetails match {
-      case OutputDetails(_, format) =>
+    def convert(outputStream: OutputStream, timeDuration: Float, outputDetails: OutputArgs)
+      (f: ProgressDetails => Unit): Option[ConversionError] = outputDetails match {
+      case OutputArgs(_, format) =>
         val outputStream = new ByteArrayOutputStream
 
         val progressListener: ProgressListener = { progress =>
@@ -66,6 +66,7 @@ package object converters {
           f(progressDetails)
         }
 
+        // TODO: Catch the the library exceptions so we can return it back
         FFmpeg.atPath(FFmpegConf.Bin)
           .addInput(PipeInput.pumpFrom(inputStream))
           .addOutput(PipeOutput.pumpTo(outputStream)
@@ -73,7 +74,7 @@ package object converters {
           .setProgressListener(progressListener)
           .execute()
 
-        outputStream
+        None
     }
   }
 }

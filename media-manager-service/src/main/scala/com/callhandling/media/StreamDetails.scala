@@ -7,11 +7,13 @@ import com.github.kokorin.jaffree.{Rational => JRational}
 import scala.collection.JavaConverters._
 
 object StreamDetails {
+  type Streams = List[StreamDetails]
+
   implicit def jRationalToRational(jRational: JRational): Option[Rational] =
     Option(jRational).map(rational =>
       Rational(rational.numerator, rational.denominator))
 
-  def extractFrom(path: String): List[StreamDetails] = {
+  def extractFrom(path: String): Streams = {
     val result = FFprobe.atPath(FFmpegConf.Bin)
       .setInput(path)
       .setShowStreams(true)
