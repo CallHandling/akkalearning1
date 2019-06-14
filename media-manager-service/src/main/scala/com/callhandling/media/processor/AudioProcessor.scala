@@ -1,14 +1,12 @@
 package com.callhandling.media.processor
 
-import akka.NotUsed
 import akka.actor.{ActorLogging, ActorRef, FSM, Props}
 import akka.stream.ActorMaterializer
-import akka.util.ByteString
 import com.callhandling.media.OutputFormat
-import com.callhandling.media.converters.{ConversionError, ConversionErrorSet, NoMediaStreamAvailable, OutputArgs, StreamInfoIncomplete}
+import com.callhandling.media.converters._
+import com.callhandling.media.io.{InputReader, OutputWriter}
 import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
-import com.callhandling.media.io.{InputReader, OutputWriter}
 
 object AudioProcessor {
   def props[I, O, SM](
@@ -30,7 +28,7 @@ object AudioProcessor {
   // FSM Data
   sealed trait Data
   case object EmptyData extends Data
-  final case class NonEmptyData[A](conversionSet: List[Conversion]) extends Data
+  final case class NonEmptyData(conversionSet: List[Conversion]) extends Data
 
   final case class Conversion(outputArgs: OutputArgs, status: ConversionStatus)
 
@@ -39,12 +37,12 @@ object AudioProcessor {
   /**
     * Conversion status for one output format
     */
-  final case class FormatConversionStatus(format: OutputFormat, conversionStatus: ConversionStatus)
+  final case class FormatConversionStatus(format: OutputFormat, status: ConversionStatus)
 
   /**
     * Conversion status for the whole file (all output formats have been considered.)
     */
-  final case class FileConversionStatus(id: String, conversionStatus: ConversionStatus)
+  final case class FileConversionStatus(id: String, status: ConversionStatus)
 }
 
 class AudioProcessor[I, O, SM](
@@ -62,57 +60,32 @@ class AudioProcessor[I, O, SM](
 
   when(Ready) {
     case Event(StartConversion(redo), data @ NonEmptyData(conversionSet)) =>
-      def isPending: Conversion => Boolean = {
-        case Conversion(_, Ready) => true
-        case Conversion(_, Failed(_)) => redo
-        case _ => false
-      }
-
-      val pendingFormats = conversionSet.filter(isPending)
-
-      /*
-      val result = streams.headOption.map { stream =>
-        stream.time.duration.map { timeDuration =>
-          val newFileId = FileActor.generateId
-
-          val region = ClusterSharding(system).shardRegion(FileActor.RegionName)
-          implicit val timeout: Timeout = 2.seconds
-
-          val fileSink = createSink(system, region, newFileId, fileData.details.filename)
-          Source.single(bytes).runWith(fileSink)(ActorMaterializer())
-
-          region ! SendToEntity(
-            newFileId, SetDetails(id = newFileId, details = fileData.details))
-
-          region ! SendToEntity(
-            newFileId, Convert(outputDetails, timeDuration))
-
-          Right(newFileId)
-        } getOrElse error("Could not extract time duration.")
-      } getOrElse error("No media stream available.")
-       */
-
-      pendingFormats.foreach { case Conversion(outputArgs, status) =>
+      def convertFormat(outputArgs: OutputArgs) = {
         implicit val materializer: ActorMaterializer = ActorMaterializer()
         implicit class OptionToEither[S](option: Option[S]) {
           def toEither[E](alternative: => E): Either[E, S] =
             option.map(Right(_)) getOrElse Left(alternative)
         }
 
-        val converstionResult = for {
+        val conversionResult = for {
           mediaStream <- mediaStreams.headOption.toEither(NoMediaStreamAvailable)
           timeDuration <- mediaStream.time.duration.toEither(StreamInfoIncomplete)
           worker = context.actorOf(Worker.props(id, inlet, output))
-        } yield Right {
-          worker ! Convert(outputArgs, timeDuration)
-          Success
-        }
+        } yield worker ! Convert(outputArgs, timeDuration)
+
+        Conversion(outputArgs, conversionResult match {
+          case Left(error) => Failed(error)
+          case Right(_) => Success
+        })
       }
 
-      goto(Converting).using(data.copy(conversionSet = conversionSet.map { conversion =>
-        if (isPending(conversion)) conversion.copy(status = Converting)
-        else conversion
-      }))
+      val convertedFormats = conversionSet.map {
+        case Conversion(outputArgs, Ready) => convertFormat(outputArgs)
+        case Conversion(outputArgs, Failed(_)) if redo => convertFormat(outputArgs)
+        case conversion => conversion
+      }
+
+      goto(Converting).using(data.copy(conversionSet = convertedFormats))
   }
 
   when(Converting) {
