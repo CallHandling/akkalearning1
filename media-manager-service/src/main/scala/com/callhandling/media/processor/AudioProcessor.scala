@@ -102,19 +102,25 @@ class AudioProcessor[I, O, SM](
         case _ => false
       }
 
-      if (remaining.isEmpty) {
-        val conversionStatus = conversionDataSet.foldLeft[ConversionStatus](Ready) {
-          case (Failed(ConversionErrorSet(errors)), Conversion(_, Failed(errorCode))) =>
-            Failed(ConversionErrorSet(errorCode :: errors))
-          case (_, Conversion(_, Failed(errorCode))) =>
-            Failed(ConversionErrorSet(errorCode :: Nil))
-          case (_, Conversion(_, failed @ Failed(_))) => failed
-          case (accStatus, Conversion(_, Success)) => accStatus
-        }
-        ackActorRef ! FileConversionStatus(id, conversionStatus)
-      }
+      val newState =
+        if (remaining.isEmpty) {
+          val conversionStatus = conversionDataSet.foldLeft[ConversionStatus](Ready) {
+            case (Failed(ConversionErrorSet(errors)), Conversion(_, Failed(errorCode))) =>
+              Failed(ConversionErrorSet(errorCode :: errors))
+            case (_, Conversion(_, Failed(errorCode))) =>
+              Failed(ConversionErrorSet(errorCode :: Nil))
+            case (_, Conversion(_, failed @ Failed(_))) => failed
+            case (accStatus, Conversion(_, Success)) => accStatus
+          }
+          ackActorRef ! FileConversionStatus(id, conversionStatus)
 
-      goto(Ready).using(NonEmptyData(newConversionDataSet))
+          goto(Ready)
+        } else stay
+
+      newState.using(NonEmptyData(newConversionDataSet))
+    case Event(progressDetails: ProgressDetails, _) =>
+      context.parent ! progressDetails
+      stay
   }
 
   initialize()
