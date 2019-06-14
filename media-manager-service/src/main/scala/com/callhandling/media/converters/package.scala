@@ -27,23 +27,9 @@ package object converters {
   }
   case object EmptyProgress
 
-  def getOutputFormats(data: Array[Byte]) = {
-    val mimeType = mimeTypeOf(data)
-
-    if (isAudio(mimeType)) Formats.Audios.all
-    else if (isVideo(mimeType)) Formats.Videos.all
-    else Nil
-  }
-
-  def isAudio: MimeDetector = _.startsWith("audio")
-  def isVideo: MimeDetector = _.startsWith("video")
-  def isSupportedMimeType: MimeDetector = mime => isAudio(mime) || isVideo(mime)
-
-  def mimeTypeOf: Array[Byte] => String = new Tika().detect
-
   implicit class InputStreamConverter(inputStream: InputStream) {
-    def convert(outputStream: OutputStream, timeDuration: Float, outputDetails: OutputArgs)
-      (f: ProgressDetails => Unit): Option[ConversionError] = outputDetails match {
+    def convert(outputStream: OutputStream, timeDuration: Float, outputArgs: OutputArgs)
+      (f: ProgressDetails => Unit): Option[ConversionError] = outputArgs match {
       case OutputArgs(_, format) =>
         val outputStream = new ByteArrayOutputStream
 
@@ -77,4 +63,18 @@ package object converters {
         None
     }
   }
+
+  def getOutputFormats(data: Array[Byte]) = {
+    val mimeType = mimeTypeOf(data)
+
+    if (isAudio(mimeType)) Formats.Audios.all
+    else if (isVideo(mimeType)) Formats.Videos.all
+    else Nil
+  }
+
+  def isAudio: MimeDetector = _.startsWith("audio")
+  def isVideo: MimeDetector = _.startsWith("video")
+  def isSupportedMimeType: MimeDetector = mime => isAudio(mime) || isVideo(mime)
+
+  def mimeTypeOf: Array[Byte] => String = new Tika().detect
 }
