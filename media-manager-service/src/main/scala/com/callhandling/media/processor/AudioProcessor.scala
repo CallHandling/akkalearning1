@@ -119,7 +119,7 @@ class AudioProcessor[I, O, SM](
 
       newState.using(NonEmptyData(newConversionDataSet))
     case Event(progressDetails: ProgressDetails, _) =>
-      context.parent ! progressDetails
+      ackActorRef ! progressDetails
       stay
   }
 
