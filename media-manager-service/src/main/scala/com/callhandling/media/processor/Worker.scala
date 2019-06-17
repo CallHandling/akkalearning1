@@ -21,21 +21,22 @@ object Worker {
 class Worker[O, SM](id: String, inlet: BytesInlet[SM], output: O)
     (implicit writer: OutputWriter[O, SM], mat: ActorMaterializer) extends Actor with ActorLogging {
   override def receive = {
-    case Convert(outputArgs, timeDuration) =>
-      log.info(s"Converting to ${outputArgs.format}...")
+    case Convert(outputArgs @ OutputArgs(_, format), timeDuration) =>
+      log.info(s"Converting to $format...")
 
-      val outlet = writer.write(output, id, outputArgs.format)
+      val outlet = writer.write(output, id, format)
       val inputStream = inlet.runWith(StreamConverters.asInputStream())
-      val outletStream = StreamConverters.asOutputStream()
-
-      val outputStream: OutputStream = outletStream.toMat(outlet)(Keep.left).run()
+      val outputStream: OutputStream = {
+        val outletStream = StreamConverters.asOutputStream()
+        outletStream.toMat(outlet)(Keep.left).run()
+      }
 
       val conversionError = inputStream.convert(outputStream, timeDuration, outputArgs) { progress =>
         context.parent ! progress
       }
 
       context.parent ! FormatConversionStatus(
-        outputArgs.format, conversionError map Failed getOrElse Success)
+        format, conversionError map Failed getOrElse Success)
 
       self ! PoisonPill
   }
