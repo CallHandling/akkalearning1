@@ -54,7 +54,7 @@ class AudioProcessor[I, O, SM](
     (implicit reader: InputReader[I, SM], writer: OutputWriter[O])
     extends FSM[ConversionStatus, Data] with ActorLogging {
   lazy val inlet = InputReader.read(input, id)
-  lazy val mediaStreams = InputReader.extractDetails(input, id)
+  lazy val mediaStreams = InputReader.extractStreamDetails(input, id)
 
   startWith(Ready, EmptyData)
 
