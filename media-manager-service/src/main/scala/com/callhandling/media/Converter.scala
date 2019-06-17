@@ -3,10 +3,16 @@ package com.callhandling.media
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.file.{Path, Paths}
 
+import akka.stream.IOResult
+import akka.stream.scaladsl.{Sink, Source, StreamConverters}
+import akka.stream.typed.scaladsl.ActorMaterializer
 import akka.util.ByteString
+import com.callhandling.Forms.ConvertFileForm
 import com.callhandling.util.FileUtil
 import com.github.kokorin.jaffree.ffmpeg._
 import org.apache.tika.Tika
+
+import scala.concurrent.Future
 
 object Converter {
   type MimeDetector = String => Boolean
@@ -84,5 +90,44 @@ object Converter {
 
       ByteString(outputStream.toByteArray)
   }
+
+  def convert(materializer: ActorMaterializer, fileSource: Source[ByteString, Any], timeDuration: Float, convertFileForm: ConvertFileForm)
+             (f: ProgressDetails => Unit): Sink[ByteString, Future[IOResult]] =
+    StreamConverters.fromOutputStream(() => {
+      implicit val materializerTyped = materializer
+      val outputStream = new ByteArrayOutputStream
+
+      val progressListener: ProgressListener = { progress =>
+        val timeDurationMillis = timeDuration * 1000
+        val percent = progress.getTimeMillis / timeDurationMillis * 100
+
+        val progressDetails = ProgressDetails(
+          bitRate = progress.getBitrate,
+          drop = progress.getDrop,
+          dup = progress.getDup,
+          fps = progress.getFps,
+          frame = progress.getFrame,
+          q = progress.getQ,
+          size = progress.getSize,
+          speed = progress.getSpeed,
+          timeMillis = progress.getTimeMillis,
+          percent: Float)
+
+        f(progressDetails)
+      }
+
+      FFmpeg.atPath(FFmpegConf.Bin)
+        .addInput(PipeInput.pumpFrom(fileSource.runWith(StreamConverters.asInputStream())))
+        .addOutput(PipeOutput.pumpTo(outputStream)
+          .addArguments("-ar", convertFileForm.sampleRate.toString)
+          .addArguments("-ac", convertFileForm.channels.toString)
+          .addArguments("-c:a", convertFileForm.codec)
+          .addArguments("-f", convertFileForm.format)
+        )
+        .setProgressListener(progressListener)
+        .execute()
+
+      outputStream
+    })
 }
 

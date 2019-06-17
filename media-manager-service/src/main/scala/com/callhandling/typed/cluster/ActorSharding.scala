@@ -26,7 +26,7 @@ object ActorSharding {
   }
   def passivateActor[E, S]: Effect[E, S] = Effect.stop[E, S]
 
-  private val clusterSeedNodeRootPort: Int = 2551
+  private val clusterSeedNodeRootPort: Int = 2552
   private var portSeq: Seq[Int] = Seq.empty
   private def getPortSeq(nPorts: Int): Seq[Int] = {
     if(nPorts > 0 && nPorts <= 100) {
@@ -47,7 +47,6 @@ object ActorSharding {
     val shardRegion = "ClusterSystem"
 
     def startClusterInSameJvm: ClusterSharding = {
-      startCassandraDatabase()
       generateNewPorts.map(port => startNode(port)).head
     }
 
@@ -60,7 +59,7 @@ object ActorSharding {
     def config(port: Int): Config =
       ConfigFactory.parseString(s"""
       akka.remote.artery.canonical.port=$port
-    """).withFallback(ConfigFactory.load("cluster.conf"))
+    """).withFallback(ConfigFactory.load("applicationTyped.conf"))
 
     /**
       * To make the sample easier to run we kickstart a Cassandra instance to
@@ -72,8 +71,8 @@ object ActorSharding {
       CassandraLauncher.start(
         databaseDirectory,
         CassandraLauncher.DefaultTestConfigResource,
-        clean = false,
-        port = 9043)
+        clean = true,
+        port = 9042)
 
       // shut the cassandra instance down when the JVM stops
       sys.addShutdownHook {
@@ -81,6 +80,7 @@ object ActorSharding {
       }
     }
 
+    startCassandraDatabase()
     startClusterInSameJvm
   }
 }

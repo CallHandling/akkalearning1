@@ -9,19 +9,28 @@ lazy val v = new {
   val scalatest = "3.0.7"
   val junit = "4.12"
   val cassandraPlugin = "0.96"
+  val gatling = "3.1.2"
+  val jackson = "2.9.9"
 }
 
+
+javaOptions in Gatling := overrideDefaultJavaOptions("-Xms1024m", "-Xmx2048m")
 lazy val `media-file-encoder` = project.in(file("."))
   .aggregate(`media-manager-service`, `media-manager-state`, `media-manager-app`)
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(ProtobufPlugin)
+  .enablePlugins(GatlingPlugin)
+
 
 lazy val `media-manager-service` = project
   .dependsOn(`media-manager-state`)
+  .enablePlugins(GatlingPlugin)
   .settings(
     // TODO: Clean this up and remove the unnecessary dependencies
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % v.scalatest % Test,
+      "io.gatling.highcharts" % "gatling-charts-highcharts" % v.gatling % Test,
+      "io.gatling" % "gatling-test-framework" % v.gatling % Test,
 
       "com.typesafe.akka" %% "akka-actor" % v.akka,
       "com.typesafe.akka" %% "akka-stream" % v.akka,
@@ -42,7 +51,8 @@ lazy val `media-manager-service` = project
       "com.typesafe.akka" %% "akka-persistence-cassandra" % v.cassandraPlugin,
       // this allows us to start cassandra from the sample
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
-      
+      "com.fasterxml.jackson.core" % "jackson-databind" % v.jackson,
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % v.jackson,
     )
   )
 

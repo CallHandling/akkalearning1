@@ -1,10 +1,8 @@
 package com.callhandling
 
-import java.io.ByteArrayOutputStream
+import java.io.{InputStream, OutputStream}
 import java.nio.file.{Files, Paths}
-import java.util.concurrent.TimeUnit
 
-import akka.actor.typed.javadsl.Adapter
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
@@ -22,23 +20,22 @@ import com.callhandling.actors.{FileActor, StreamActor}
 import com.callhandling.media.Converter.{OutputDetails, ProgressDetails}
 import com.callhandling.media.DataType.Rational
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.{Converter, FFmpegConf, StreamDetails}
+import com.callhandling.media.{FFmpegConf, StreamDetails}
 import com.callhandling.media.StreamDetails._
 import com.callhandling.typed.cluster.ActorSharding
-import com.callhandling.typed.persistence.{AddFile, AddFileCommand, AddFormCommand, FileListActor, GetFile, GetFileCommand, UploadedFile}
-import spray.json.{DefaultJsonProtocol, JsValue, RootJsonFormat}
+import com.callhandling.typed.persistence.{AddFile, AddFileCommand, AddFormCommand, ConvertFileCommand, FileListActor, FilePipeline, GetFile, GetFileCommand, UploadedFile}
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
-import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.io.StdIn
 import scala.util.{Failure, Success}
 import akka.actor.typed.scaladsl.AskPattern._
-import akka.http.scaladsl.marshalling.{Marshal, Marshaller}
-import akka.http.scaladsl.model.HttpEntity.Chunked
+import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeOutput, UrlInput, UrlOutput}
+import com.github.kokorin.jaffree.{LogLevel, StreamType}
+import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeInput, PipeOutput, UrlInput, UrlOutput}
 
 import scala.concurrent.duration._
-import scala.Option
 
 object Service {
 
@@ -75,7 +72,7 @@ object Service {
     implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat3(ConversionResult)
 
     implicit val uploadFileFormFormat: RJF[UploadFileForm] = jsonFormat1(UploadFileForm)
-    implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat2(ConvertFileForm)
+    implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat5(ConvertFileForm)
     implicit val fileIdFormFormat: RJF[FileIdForm] = jsonFormat1(FileIdForm)
     implicit val conversionProgressFormat: RJF[ProgressDetails] = jsonFormat10(ProgressDetails)
 
@@ -172,7 +169,7 @@ class Service(fileManagerRegion: ActorRef) (
     pathEndOrSingleSlash {
       post {
         entity(as[ConvertFileForm]) { form =>
-          validateForm(form).apply { case ConvertFileForm(fileId, format) =>
+          validateForm(form).apply { case ConvertFileForm(fileId, format, _, _, _) =>
             // TODO: filename is still hardcoded here
             val outputDetails = OutputDetails("converted", format)
 
@@ -220,150 +217,10 @@ class Service(fileManagerRegion: ActorRef) (
     }
   }
 
-
-  //  implicit val systemTyped = Adapter.toTyped(system)
-  //  implicit val materializerTyped = akka.stream.typed.scaladsl.ActorMaterializer()(systemTyped)
-  //  implicit val executionContextTyped: ExecutionContextExecutor = systemTyped.executionContext
-  //  implicit val schedulerTyped = systemTyped.scheduler
-  val fileListActorSharding = ActorSharding(FileListActor, 3)
-  val fileListActorEntityRef = fileListActorSharding.entityRefFor(FileListActor.entityTypeKey, ActorSharding.generateEntityId)
-
-  def uploadV2 = pathPrefix("upload") {
-    pathEndOrSingleSlash {
-      post {
-        entity(as[UploadFileForm]) { form =>
-          validateForm(form).apply {
-            vform =>
-              val fileId = ActorSharding.generateEntityId
-              val future: Future[AddFile] = fileListActorEntityRef.ask(ref => AddFormCommand(fileId, vform, ref))
-              onSuccess(future) {
-                case AddFile(id) =>
-                  complete(FileIdResult(id))
-                case _ => complete(internalError("Could not retrieve file data."))
-              }
-          }
-        }
-      }
-    } ~
-      withoutSizeLimit {
-        path(Remaining) { fileId =>
-          put {
-            val form = FileIdForm(fileId)
-            validateForm(form).apply {
-              vform => {
-                //TODO: Add checking for valid vform.fileId on fileListActor
-                if (false) {
-                  complete(internalError("No actor found with id: " + vform.fileId))
-                } else {
-                  fileUpload("file") {
-                    case (fileInfo, fileStream) =>
-                      val filePath = Paths.get("/tmp") resolve vform.fileId
-                      val sink = FileIO.toPath(filePath)
-                      val writeResult = fileStream.runWith(sink)
-                      onSuccess(writeResult) { result =>
-                        result.status match {
-                          case Success(_) => {
-                            //complete(s"Successfully written ${result.count} bytes")
-                            val path = filePath.toFile.getAbsolutePath
-                            val future: Future[GetFile] = fileListActorEntityRef.ask(ref => AddFileCommand(fileId, path, fileInfo.fileName, ref))
-                            onSuccess(future) {
-                              case GetFile(_, UploadedFile(fileId, _, details, streams, outputFormats)) =>
-                                complete(UploadResult(fileId, details.filename, details.description, streams, outputFormats))
-                              case _ => complete(internalError("Could not retrieve file data."))
-                            }
-                          }
-                          case Failure(e) => throw e
-                        }
-                      }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-  }
-
-  def convertV2 = pathPrefix("convert") {
-    pathEndOrSingleSlash {
-      post {
-        entity(as[ConvertFileForm]) { form =>
-          validateForm(form).apply {
-            vform =>
-              val uploadFileDescription: Future[HttpResponse] = Http().singleRequest(
-                HttpRequest(uri = s"http://localhost:8080/api/v2/file/upload",
-                  method = HttpMethods.POST,
-                  entity = Await.result(Marshal(UploadFileForm("67890")).to[RequestEntity], 3.seconds)))
-
-              onSuccess(uploadFileDescription) {
-                case HttpResponse(StatusCodes.OK, _, entity, _) => {
-                  val nform = Await.result(Unmarshal(entity).to[FileIdForm], 3.seconds)
-                  val inputPath = Paths.get(s"http://localhost:8080/api/v2/file/play/${vform.fileId}")
-
-                  val tmpPath = Paths.get(s"/tmp/${vform.fileId}-conversionTo-${nform.fileId}")
-                  FFmpeg.atPath(FFmpegConf.Bin)
-                    .addInput(UrlInput.fromPath(inputPath))
-                    .addOutput(UrlOutput.toPath(tmpPath)
-                      .setFormat(vform.format))
-                    .execute()
-
-                  val formData = Multipart.FormData(
-                    Source(
-                      Multipart.FormData.BodyPart.fromPath("file", ContentType(MediaTypes.`application/octet-stream`), tmpPath, 100) :: Nil
-                    )
-                  )
-                  val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri=s"http://localhost:8080/api/v2/file/upload/${nform.fileId}", method = HttpMethods.PUT, entity = formData.toEntity))
-
-                  onSuccess(responseFuture) {
-                    case response @ HttpResponse(StatusCodes.OK, _, _, _) =>
-                      Files.delete(tmpPath)
-                      complete(response)
-                  }
-                }
-              }
-          }
-        }
-      }
-    } ~
-      path("status" / Remaining) { fileId =>
-        get {
-          val form = FileIdForm(fileId)
-          validateForm(form).apply {
-            case FileIdForm(fileId) =>
-              val conversionStatusF = fileManagerRegion ? SendToEntity(fileId, GetConversionStatus)
-
-              onSuccess(conversionStatusF) {
-                case progress: ProgressDetails => complete(progress)
-                case _ => complete(internalError("Could not retrieve conversion status."))
-              }
-          }
-        }
-      }
-  }
-
-  def playV2 = pathPrefix("play") {
-    path(Remaining) { fileId =>
-      get {
-        val form = FileIdForm(fileId)
-        validateForm(form).apply {
-          vform =>
-            val future: Future[GetFile] = fileListActorEntityRef.ask(ref => GetFileCommand(vform.fileId, ref))
-            onSuccess(future) {
-              case GetFile(_, UploadedFile(_, path, _, _, _)) =>
-                val entity = HttpEntity.Chunked.fromData(ContentTypes.`application/octet-stream`, FileIO.fromPath(Paths.get(path), 100))
-                complete(HttpResponse(entity = entity))
-              case _ => complete(internalError("Could not play file."))
-            }
-        }
-      }
-    }
-  }
-
   def internalError(msg: String) = HttpResponse(InternalServerError, entity = msg)
 
   def restart(): Unit = {
-    val route = pathPrefix("api" / "v1" / "file") { uploadV1 ~ convertV1 ~ playV1} ~
-      pathPrefix("api" / "v2" / "file") { uploadV2 ~ convertV2 ~ playV2}
+    val route = pathPrefix("api" / "v1" / "file") { uploadV1 ~ convertV1 ~ playV1}
     val port = 8080
     val bindingFuture = Http().bindAndHandle(route, "localhost", port)
 
