@@ -12,6 +12,7 @@ object InputReader {
       (implicit reader: InputReader[I, SM]): BytesInlet[SM] =
     reader.read(input, id)
 
-  def extractDetails[I, SM](input: I, id: String)(implicit reader: InputReader[I, SM]) =
+  def extractStreamDetails[I, SM](input: I, id: String)
+      (implicit reader: InputReader[I, SM]) =
     reader.extractStreamDetails(input, id)
 }
