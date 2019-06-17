@@ -11,7 +11,7 @@ import com.callhandling.util.FileUtil._
 
 import scala.concurrent.Future
 
-class FileStreamIO {
+class FileStreamIO(storagePath: String) {
   import FileStreamIO._
 
   def read: String => FileByteSource = filePath andThen pathToSource
@@ -20,20 +20,19 @@ class FileStreamIO {
     filePathString andThen StreamDetails.extractFrom
 
   def write(id: String, format: String): FileByteSink = {
-    val outputPath = Paths.get(pathString(filePath(id)), s".format")
+    val basePath = filePath(id).getParent
+    val outputPath = basePath.resolve(s"${id}_$format")
     pathToSink(outputPath)
   }
+
+  def filePath: String => Path = Paths.get(storagePath, _)
+
+  def filePathString: String => String = filePath andThen pathString
 }
 
 object FileStreamIO {
   type FileByteSource = Source[ByteString, Future[IOResult]]
   type FileByteSink = Sink[ByteString, Future[IOResult]]
-
-  lazy val StoragePath: Path = getOrCreatePath("media_processor")
-
-  def filePath: String => Path = Paths.get(pathString(StoragePath), _)
-
-  def filePathString: String => String = filePath andThen pathString
 
   def pathToSource: Path => FileByteSource = FileIO.fromPath(_)
 

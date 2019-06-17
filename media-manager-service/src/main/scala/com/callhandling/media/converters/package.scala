@@ -31,8 +31,6 @@ package object converters {
     def convert(outputStream: OutputStream, timeDuration: Float, outputArgs: OutputArgs)
       (f: ProgressDetails => Unit): Option[ConversionError] = outputArgs match {
       case OutputArgs(_, format) =>
-        val outputStream = new ByteArrayOutputStream
-
         val progressListener: ProgressListener = { progress =>
           val timeDurationMillis = timeDuration * 1000
           val percent = progress.getTimeMillis / timeDurationMillis * 100

@@ -102,7 +102,7 @@ class AudioProcessor[I, O, SM](
 
       newState.using(NonEmptyData(newConversionDataSet))
     case Event(progressDetails: ProgressDetails, _) =>
-      ackActorRef ! progressDetails
+      //ackActorRef ! progressDetails
       stay
   }
 
@@ -123,6 +123,11 @@ class AudioProcessor[I, O, SM](
       case Left(error) => Failed(error)
       case Right(_) => Converting
     })
+  }
+
+  onTransition {
+    case Ready -> Converting => log.info("Converting...")
+    case Converting -> Ready => log.info("Conversion completed.")
   }
 
   initialize()

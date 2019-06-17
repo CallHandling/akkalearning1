@@ -6,7 +6,7 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.{ByteString, Timeout}
-import com.callhandling.actors.FileActor.{ConversionStarted, Convert, SendToEntity, SetStreamInfo, _}
+import com.callhandling.actors.FileActor.{ConversionStarted, Convert, SetStreamInfo, _}
 import com.callhandling.media.StreamDetails
 
 import scala.concurrent.Await
@@ -44,6 +44,7 @@ object StreamActor {
 case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
   import StreamActor._
 
+  /*
   def handleStreamUpload(bytes: ByteString): Receive = {
     case cmd: StreamInitialized =>
       log.info("Stream Initialized")
@@ -111,4 +112,9 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
     }
 
   def receive: Receive = receive(ByteString.empty)
+   */
+
+  def receive: Receive = {
+    case _ =>
+  }
 }

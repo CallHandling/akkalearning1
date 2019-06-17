@@ -33,7 +33,7 @@ object Service {
       description: String,
       streams: List[StreamDetails],
       outputFormats: List[Format])
-
+/*
   final case class ConversionResult(message: String, fileId: String, outputDetails: OutputDetails)
 
   object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
@@ -71,7 +71,7 @@ object Service {
       }
     }
   }
-
+*/
   final case class MediaFileDetail(description: String)
 
   def apply(fileManagerRegion: ActorRef)(
@@ -85,6 +85,7 @@ class Service(fileManagerRegion: ActorRef) (
     implicit system: ActorSystem,
     materializer: ActorMaterializer,
     timeout: Timeout) {
+  /*
   import FileActor._
   import Forms._
   import Service._
@@ -215,5 +216,5 @@ class Service(fileManagerRegion: ActorRef) (
     bindingFuture
       .flatMap(_.unbind()) // trigger unbinding from the port
       .onComplete(_ => system.terminate()) // and shutdown when done
-  }
+  }*/
 }

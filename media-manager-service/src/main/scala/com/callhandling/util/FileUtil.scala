@@ -17,9 +17,8 @@ object FileUtil {
     path
   }
 
-  def getOrCreatePath(directory: String): Path = {
-    val tempDir = System.getProperty("java.io.tmpdir")
-    val path = Paths.get(tempDir, directory)
+  def getOrCreatePath(directory: String, baseDir: String = System.getProperty("java.io.tmpdir")): Path = {
+    val path = Paths.get(baseDir, directory)
 
     // create the file if it does not exist.
     val dir = new File(pathString(path))
