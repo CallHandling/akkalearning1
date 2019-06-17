@@ -15,7 +15,7 @@ object AudioProcessor {
       input: I,
       output: O,
       ackActorRef: ActorRef)
-      (implicit reader: InputReader[I, SM], writer: OutputWriter[O]): Props =
+      (implicit reader: InputReader[I, SM], writer: OutputWriter[O, SM]): Props =
     Props(new AudioProcessor(id, outputArgsSet, input, output, ackActorRef))
 
   // FSM States
@@ -51,7 +51,7 @@ class AudioProcessor[I, O, SM](
     input: I,
     output: O,
     ackActorRef: ActorRef)
-    (implicit reader: InputReader[I, SM], writer: OutputWriter[O])
+    (implicit reader: InputReader[I, SM], writer: OutputWriter[O, SM])
     extends FSM[ConversionStatus, Data] with ActorLogging {
   lazy val inlet = InputReader.read(input, id)
   lazy val mediaStreams = InputReader.extractStreamDetails(input, id)

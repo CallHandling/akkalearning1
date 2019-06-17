@@ -10,14 +10,14 @@ import com.callhandling.media.processor.Worker.Convert
 
 object Worker {
   def props[O, SM](id: String, inlet: BytesInlet[SM], output: O)
-      (implicit outputWriter: OutputWriter[O], materializer: ActorMaterializer): Props =
+      (implicit outputWriter: OutputWriter[O, SM], materializer: ActorMaterializer): Props =
     Props(new Worker[O, SM](id, inlet, output))
 
   final case class Convert(outputArgs: OutputArgs, timeDuration: Float)
 }
 
 class Worker[O, SM](id: String, inlet: BytesInlet[SM], output: O)
-    (implicit outputWriter: OutputWriter[O], materializer: ActorMaterializer) extends Actor {
+    (implicit outputWriter: OutputWriter[O, SM], materializer: ActorMaterializer) extends Actor {
   override def receive = {
     case Convert(outputArgs, timeDuration) =>
       val outlet = outputWriter.write(output, id, outputArgs.format)
