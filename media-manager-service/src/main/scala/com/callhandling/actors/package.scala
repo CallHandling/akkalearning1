@@ -17,7 +17,7 @@ package object actors {
     */
   final case class SendToEntity(id: String, message: Any)
 
-  def shardRegion(system: ActorSystem)(props: Props): ActorRef = ClusterSharding(system).start(
+  def shardRegion(system: ActorSystem, props: Props): ActorRef = ClusterSharding(system).start(
     typeName = RegionName,
     entityProps = props,
     settings = ClusterShardingSettings(system),
