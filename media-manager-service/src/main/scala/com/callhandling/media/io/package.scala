@@ -6,5 +6,5 @@ import akka.util.ByteString
 
 package object io {
   type BytesInlet[SM] = Source[ByteString, SM]
-  type BytesOutlet = Sink[ByteString, ActorMaterializer]
+  type BytesOutlet[SM] = Sink[ByteString, SM]
 }
