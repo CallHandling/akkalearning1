@@ -49,7 +49,7 @@ object FileActor {
       streams: List[StreamDetails],
       outputFormats: List[Format],
       streamRef: ActorRef) extends Data
-  final case class ConversionData(fileData: FileData, progress: ProgressDetails) extends Data
+  final case class ConversionData(fileData: FileData, progress: Progress) extends Data
 }
 
 class FileActor extends FSM[State, Data] with Stash with ActorLogging {
@@ -102,9 +102,9 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(CompleteConversion, ConversionData(fileData, _)) =>
       log.info("Conversion Completed.")
       goto(Ready).using(fileData)
-    case Event(progressDetails: ProgressDetails, fileData: FileData) =>
+    case Event(progressDetails: Progress, fileData: FileData) =>
       logProgressAndStay(ConversionData(fileData, progressDetails))
-    case Event(progressDetails: ProgressDetails, conversionData: ConversionData) =>
+    case Event(progressDetails: Progress, conversionData: ConversionData) =>
       logProgressAndStay(conversionData.copy(progress = progressDetails))
     case Event(GetConversionStatus, ConversionData(_, progress)) =>
       sender() ! progress

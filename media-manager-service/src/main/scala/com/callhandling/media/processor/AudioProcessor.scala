@@ -46,6 +46,8 @@ object AudioProcessor {
     * Conversion status for the whole file (all output formats have been considered.)
     */
   final case class FileConversionStatus(id: String, status: ConversionStatus)
+
+  final case class FormatProgress(format: OutputFormat, progress: Progress)
 }
 
 class AudioProcessor[I, O, M](
@@ -91,26 +93,25 @@ class AudioProcessor[I, O, M](
         case conversion => conversion
       }
 
-      val remaining = conversionSet.filter(_.status == Converting)
+      val remaining = newConversionSet.filter(_.status == Converting)
 
-      val newState =
-        if (remaining.isEmpty) {
-          val conversionStatus = conversionSet.foldLeft[ConversionStatus](Ready) {
-            case (Failed(ConversionErrorSet(errors)), Conversion(_, Failed(errorCode))) =>
-              Failed(ConversionErrorSet(errorCode :: errors))
-            case (_, Conversion(_, Failed(errorCode))) =>
-              Failed(ConversionErrorSet(errorCode :: Nil))
-            case (_, Conversion(_, failed @ Failed(_))) => failed
-            case (accStatus, Conversion(_, Success)) => accStatus
-          }
-          ackActorRef ! FileConversionStatus(id, conversionStatus)
+      val newState = if (remaining.isEmpty) {
+        val conversionStatus = newConversionSet.foldLeft[ConversionStatus](Ready) {
+          case (Failed(ConversionErrorSet(errors)), Conversion(_, Failed(errorCode))) =>
+            Failed(ConversionErrorSet(errorCode :: errors))
+          case (_, Conversion(_, Failed(errorCode))) =>
+            Failed(ConversionErrorSet(errorCode :: Nil))
+          case (_, Conversion(_, failed @ Failed(_))) => failed
+          case (accStatus, Conversion(_, Success)) => accStatus
+        }
+        ackActorRef ! FileConversionStatus(id, conversionStatus)
 
-          goto(Ready)
-        } else stay
+        goto(Ready)
+      } else stay
 
       newState.using(data.copy(conversionSet = newConversionSet))
-    case Event(progressDetails: ProgressDetails, _) =>
-      ackActorRef ! progressDetails
+    case Event(formatProgress: FormatProgress, _) =>
+      ackActorRef ! formatProgress
       stay
   }
 
