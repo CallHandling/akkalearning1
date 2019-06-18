@@ -11,15 +11,15 @@ import com.callhandling.media.processor.AudioProcessor.{Failed, FormatConversion
 import com.callhandling.media.processor.Worker.Convert
 
 object Worker {
-  def props[O, SM](id: String, inlet: BytesInlet[SM], output: O)
-      (implicit writer: OutputWriter[O, SM], mat: ActorMaterializer): Props =
-    Props(new Worker[O, SM](id, inlet, output))
+  def props[O, M](id: String, inlet: BytesInlet[M], output: O)
+      (implicit writer: OutputWriter[O, M], mat: ActorMaterializer): Props =
+    Props(new Worker[O, M](id, inlet, output))
 
   final case class Convert(outputArgs: OutputArgs, timeDuration: Float)
 }
 
-class Worker[O, SM](id: String, inlet: BytesInlet[SM], output: O)
-    (implicit writer: OutputWriter[O, SM], mat: ActorMaterializer) extends Actor with ActorLogging {
+class Worker[O, M](id: String, inlet: BytesInlet[M], output: O)
+    (implicit writer: OutputWriter[O, M], mat: ActorMaterializer) extends Actor with ActorLogging {
   override def receive = {
     case Convert(outputArgs @ OutputArgs(_, format), timeDuration) =>
       log.info(s"Converting to $format...")
