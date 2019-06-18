@@ -7,7 +7,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Keep, StreamConverters}
 import com.callhandling.media.converters._
 import com.callhandling.media.io.{BytesInlet, OutputWriter}
-import com.callhandling.media.processor.AudioProcessor.{Failed, FormatConversionStatus, Success}
+import com.callhandling.media.processor.AudioProcessor.{Failed, FormatConversionStatus, FormatProgress, Success}
 import com.callhandling.media.processor.Worker.Convert
 
 object Worker {
@@ -32,7 +32,7 @@ class Worker[O, M](id: String, inlet: BytesInlet[M], output: O)
       }
 
       val conversionError = inputStream.convert(outputStream, timeDuration, outputArgs) { progress =>
-        context.parent ! progress
+        context.parent ! FormatProgress(format, progress)
       }
 
       context.parent ! FormatConversionStatus(

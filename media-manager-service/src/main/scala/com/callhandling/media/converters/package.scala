@@ -9,7 +9,7 @@ package object converters {
   type MimeDetector = String => Boolean
 
   case class OutputArgs(filename: String, format: String)
-  case class ProgressDetails(
+  case class Progress(
       bitRate: Double,
       drop: Long,
       dup: Long,
@@ -29,13 +29,13 @@ package object converters {
 
   implicit class InputStreamConverter(inputStream: InputStream) {
     def convert(outputStream: OutputStream, timeDuration: Float, outputArgs: OutputArgs)
-      (f: ProgressDetails => Unit): Option[ConversionError] = outputArgs match {
+      (f: Progress => Unit): Option[ConversionError] = outputArgs match {
       case OutputArgs(_, format) =>
         val progressListener: ProgressListener = { progress =>
           val timeDurationMillis = timeDuration * 1000
           val percent = progress.getTimeMillis / timeDurationMillis * 100
 
-          val progressDetails = ProgressDetails(
+          val progressDetails = Progress(
             bitRate = progress.getBitrate,
             drop = progress.getDrop,
             dup = progress.getDup,
