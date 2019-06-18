@@ -9,13 +9,13 @@ import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
 
 object AudioProcessor {
-  def props[I, O, SM](
+  def props[I, O, M](
       id: String,
       outputArgsSet: List[OutputArgs],
       input: I,
       output: O,
       ackActorRef: ActorRef)
-      (implicit reader: InputReader[I, SM], writer: OutputWriter[O, SM]): Props =
+      (implicit reader: InputReader[I, M], writer: OutputWriter[O, M]): Props =
     Props(new AudioProcessor(id, outputArgsSet, input, output, ackActorRef))
 
   sealed trait ConversionStatus
