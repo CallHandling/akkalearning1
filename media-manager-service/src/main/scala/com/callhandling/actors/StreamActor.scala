@@ -44,7 +44,6 @@ object StreamActor {
 case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
   import StreamActor._
 
-  /*
   def handleStreamUpload(bytes: ByteString): Receive = {
     case cmd: StreamInitialized =>
       log.info("Stream Initialized")
@@ -112,9 +111,4 @@ case class StreamActor(system: ActorSystem) extends Actor with ActorLogging {
     }
 
   def receive: Receive = receive(ByteString.empty)
-   */
-
-  def receive: Receive = {
-    case _ =>
-  }
 }

@@ -14,7 +14,7 @@ import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
 import com.callhandling.actors.FileActor.Details
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.{Converter, StreamDetails}
+import com.callhandling.media.StreamDetails
 import com.callhandling.typed.cluster.ActorSharding
 import com.typesafe.config.Config
 
@@ -129,7 +129,7 @@ object FileListActor extends ActorSharding[FileListCommand] {
           case Success(_) => {
             val uploadedFile = fileMap.get(fileId).get
             val details = Details(fileName, uploadedFile.details.description)
-            val streams = StreamDetails.extractFrom(filePath)
+            val streams = StreamDetails.extractFrom(filePath.toAbsolutePath.toString)
             val outputFormats = Converter.getOutputFormats(filePath)
             val updatedFile = UploadedFile(fileId, details, streams, outputFormats)
             val evt = AddFileEvent(fileId, updatedFile)
