@@ -5,4 +5,6 @@ target
 */project/target
 */project/project/target
 
+*/*/*/resources/reference.conf
+
 tests.sc

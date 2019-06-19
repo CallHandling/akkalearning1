@@ -16,7 +16,7 @@ import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
 import com.callhandling.actors.FileActor.Details
 import com.callhandling.media.Formats.Format
-import com.callhandling.media.{Converter, StreamDetails}
+import com.callhandling.media.StreamDetails
 import com.callhandling.typed.cluster.ActorSharding
 import com.typesafe.config.Config
 
@@ -26,6 +26,7 @@ import scala.util.{Success, Try}
 import akka.stream.alpakka.s3.BucketAccess.{AccessDenied, AccessGranted, NotExists}
 import akka.stream.alpakka.s3.MultipartUploadResult
 import akka.stream.alpakka.s3.scaladsl.S3
+import com.callhandling.media.converters.Converter
 import com.callhandling.typed.persistence.FileConvertResponse.ConvertStatus
 
 sealed trait FilePipeline
@@ -34,7 +35,7 @@ case object FilePipeline {
     def getPath(fileId: String) = Paths.get(s"/tmp/${fileId}")
   }
   final case object AmazonS3 extends FilePipeline {
-    val bucketName = "audio-processor"
+    val bucketName = "hubbub-ph-training"
   }
 }
 
@@ -60,11 +61,9 @@ final case class StorageState(fileMap: Map[String, UploadedFile])  extends FileL
     implicit val materializerTyped = ActorMaterializer()(context.system)
     implicit val executionContextTyped = context.executionContext
     S3.checkIfBucketExists(FilePipeline.AmazonS3.bucketName).map {
-      case NotExists => S3.makeBucket(FilePipeline.AmazonS3.bucketName).map({
-        case Done => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : bucket added")
-      })
-      case AccessGranted => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : access granted")
-      case AccessDenied => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : access denied")
+      case NotExists => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : NotExists")
+      case AccessGranted => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : AccessGranted")
+      case AccessDenied => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : AccessDenied")
     }
     this
   }

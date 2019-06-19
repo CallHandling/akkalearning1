@@ -5,7 +5,6 @@ ThisBuild / organization := "com.callhandling"
 lazy val v = new {
   val akka = "2.5.22"
   val akkaHttp = "10.1.8"
-  val akkaTyped = "2.5.8"
   val scalatest = "3.0.7"
   val junit = "4.12"
   val cassandraPlugin = "0.96"
@@ -19,8 +18,8 @@ javaOptions in Gatling := overrideDefaultJavaOptions("-Xms1024m", "-Xmx2048m")
 lazy val `media-file-encoder` = project.in(file("."))
   .aggregate(`media-manager-service`, `media-manager-state`, `media-manager-app`)
   .enablePlugins(JavaAppPackaging)
-  .enablePlugins(ProtobufPlugin)
-  .enablePlugins(GatlingPlugin)
+  .enablePlugins(ProtobufPlugin) // protobuf:protobufGenerate
+  .enablePlugins(GatlingPlugin) // gatling:test
   .enablePlugins(ScalaJSPlugin)
 
 lazy val `media-manager-service` = project
@@ -52,6 +51,7 @@ lazy val `media-manager-service` = project
       "com.typesafe.akka" %% "akka-persistence-cassandra" % v.cassandraPlugin,
       // this allows us to start cassandra from the sample
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
+      "de.heikoseeberger" %% "akka-http-jackson" % "1.25.2",
       "com.fasterxml.jackson.core" % "jackson-databind" % v.jackson,
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % v.jackson,
 
@@ -80,14 +80,16 @@ lazy val `media-manager-state` = project
       // this allows us to start cassandra from the sample
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
 
-      "com.typesafe.akka" %% "akka-http" % "10.1.8",
+      "com.typesafe.akka" %% "akka-http" % v.akkaHttp,
 
       "de.heikoseeberger" %% "akka-http-jackson" % "1.25.2",
-      "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.9.9",
+      "com.fasterxml.jackson.core" % "jackson-databind" % v.jackson,
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % v.jackson,
 
       "ws.schild" % "jave-core" % "2.4.6",
-      "ws.schild" % "jave-native-linux64" % "2.4.6"
+      "ws.schild" % "jave-native-linux64" % "2.4.6",
+
+      "com.google.protobuf" % "protobuf-java" % "3.8.0"
     )
   )
   .enablePlugins(ProtobufPlugin)

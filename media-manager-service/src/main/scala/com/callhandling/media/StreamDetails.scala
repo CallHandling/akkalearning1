@@ -93,7 +93,7 @@ object StreamDetails {
     }.toList
   }
 
-  def extractFrom(path: String): List[StreamDetails] = {
+  def extractFrom(path: Path): List[StreamDetails] = {
 
     val result = FFprobe.atPath(FFmpegConf.Bin)
       .setInput(path)
