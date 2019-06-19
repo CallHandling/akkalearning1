@@ -5,7 +5,9 @@ import java.nio.file.{Path, Paths}
 import akka.stream.IOResult
 import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
-import com.callhandling.media.StreamDetails
+import com.callhandling.media.converters.Formats
+import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.{MediaID, MediaStream, OutputFormat}
 import com.callhandling.util.FileUtil._
 
 import scala.concurrent.Future
@@ -13,20 +15,24 @@ import scala.concurrent.Future
 class FileStreamIO(storagePath: String) {
   import FileStreamIO._
 
-  def read: String => FileByteSource = filePath andThen pathToSource
+  def read: MediaID => FileByteSource = filePath andThen pathToSource
 
-  def extractStreamDetails: String => List[StreamDetails] =
-    filePathString andThen StreamDetails.extractFrom
+  def mediaStreams: MediaID => Vector[MediaStream] =
+    filePathString andThen MediaStream.extractFrom
 
-  def write(id: String, format: String): FileByteSink = {
+  def write(id: MediaID, format: Option[OutputFormat]): FileByteSink = {
     val basePath = filePath(id).getParent
-    val outputPath = basePath.resolve(s"${id}_$format")
+    val suffix = format.map("_" + _).getOrElse("")
+    val outputPath = basePath.resolve(s"$id$suffix")
     pathToSink(outputPath)
   }
 
-  def filePath: String => Path = Paths.get(storagePath, _)
+  def outputFormats: MediaID => Vector[Format] =
+    filePath andThen Formats.outputFormatsOf
 
-  def filePathString: String => String = filePath andThen pathString
+  def filePath: MediaID => Path = Paths.get(storagePath, _)
+
+  def filePathString: MediaID => String = filePath andThen pathString
 }
 
 object FileStreamIO {

@@ -4,8 +4,8 @@ import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.callhandling.Forms.UploadFileForm
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.media.Formats.Format
-import com.callhandling.media.StreamDetails
+import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.MediaStream
 import com.callhandling.media.converters._
 
 object FileActor {

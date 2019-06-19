@@ -1,6 +1,7 @@
 package com.callhandling
 
-import akka.http.scaladsl.server.Rejection
+import akka.http.scaladsl.server.{Rejection, RejectionHandler}
+import akka.http.scaladsl.server.directives.RouteDirectives.complete
 
 
 final case class FieldErrorInfo(name: String, error: String)
@@ -36,10 +37,11 @@ object ValidationUtils {
   def minValidation(limit: Int) = Validation[Any](minRule(limit), minMessage(limit))
 }
 
-
+// TODO: Move the implicit validators to their own package objects
 object Forms {
   final case class UploadFileForm(description: String)
-  object UploadFileFormValidator extends Validator[UploadFileForm] {
+
+  implicit object UploadFileFormValidator extends Validator[UploadFileForm] {
     override def apply(model: UploadFileForm): Seq[FieldErrorInfo] = {
 
       val description: Option[FieldErrorInfo] =
@@ -50,7 +52,8 @@ object Forms {
   }
 
   final case class ConvertFileForm(fileId: String, format: String, channels: Int, sampleRate: Int, codec: String)
-  object ConvertFileFormValidator extends Validator[ConvertFileForm] {
+
+  implicit object ConvertFileFormValidator extends Validator[ConvertFileForm] {
     override def apply(model: ConvertFileForm): Seq[FieldErrorInfo] = {
       val fileId: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "fileId", model.fileId)
       val format: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "format", model.format)
@@ -63,7 +66,8 @@ object Forms {
   }
 
   final case class FileIdForm(fileId: String)
-  object FileIdFormValidator extends Validator[FileIdForm] {
+
+  implicit object FileIdFormValidator extends Validator[FileIdForm] {
     override def apply(model: FileIdForm): Seq[FieldErrorInfo] = {
 
       val fileId: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "fileId", model.fileId)

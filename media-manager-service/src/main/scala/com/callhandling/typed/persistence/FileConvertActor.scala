@@ -10,8 +10,8 @@ import akka.stream.typed.scaladsl.ActorMaterializer
 import akka.util.ByteString
 import com.callhandling.Forms.ConvertFileForm
 import com.callhandling.actors.FileActor.Details
-import com.callhandling.media.Formats.Format
-import com.callhandling.media.StreamDetails
+import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.MediaStream
 import com.callhandling.typed.cluster.ActorSharding
 import com.callhandling.typed.persistence.FileConvertResponse.{ConvertFile, ConvertStatus}
 import com.typesafe.config.Config

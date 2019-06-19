@@ -9,17 +9,19 @@ import akka.http.scaladsl.server.Directives.{entity, path, _}
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.http.scaladsl.server.{Directive1, RejectionHandler}
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Keep
+import akka.stream.{ActorMaterializer, IOResult}
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms._
 import com.callhandling.actors.{FileActor, SendToEntity}
-import com.callhandling.media.Formats.Format
-import com.callhandling.media.StreamDetails._
+import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.MediaStream._
 import com.callhandling.media.converters.{OutputArgs, Progress}
-import com.callhandling.media.{Rational, StreamDetails}
+import com.callhandling.media.io.{MediaReader, MediaWriter}
+import com.callhandling.media.{Rational, MediaStream}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 import scala.util.Success
 
@@ -29,8 +31,8 @@ object Service {
       fileId: String,
       filename: String,
       description: String,
-      streams: List[StreamDetails],
-      outputFormats: List[Format])
+      streams: Vector[MediaStream],
+      outputFormats: Vector[Format])
 
   final case class ConversionResult(message: String, fileId: String, outputArgs: OutputArgs)
 
@@ -48,7 +50,7 @@ object Service {
     implicit val frameRatesFormat: RJF[FrameRates] = jsonFormat2(FrameRates)
     implicit val timeFormat: RJF[Time] = jsonFormat6(Time)
     implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
-    implicit val streamDetailsFormat: RJF[StreamDetails] = jsonFormat21(StreamDetails.apply)
+    implicit val streamDetailsFormat: RJF[MediaStream] = jsonFormat21(MediaStream.apply)
     implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
     implicit val outputArgsFormat: RJF[OutputArgs] = jsonFormat2(OutputArgs)
 
@@ -73,28 +75,34 @@ object Service {
 
   final case class MediaFileDetail(description: String)
 
-  def apply[I, O](
+  def apply[I, O, M](
       fileRegion: ActorRef,
       audioProcessorRegion: ActorRef,
       input: I,
       output: O)
-      (implicit system: ActorSystem, mat: ActorMaterializer, timeout: Timeout) =
+      (implicit
+          system: ActorSystem,
+          mat: ActorMaterializer,
+          timeout: Timeout,
+          reader: MediaReader[I, M],
+          writer: MediaWriter[O, M]) =
     new Service(fileRegion, audioProcessorRegion, input, output)
 }
 
-class Service[I, O](
-    fileManagerRegion: ActorRef, audioProcessorRegion: ActorRef, input: I, output: O)
-    (implicit system: ActorSystem, mat: ActorMaterializer, timeout: Timeout) {
+class Service[I, O, M](
+    fileRegion: ActorRef, audioProcessorRegion: ActorRef, input: I, output: O)
+    (implicit
+        system: ActorSystem,
+        mat: ActorMaterializer,
+        timeout: Timeout,
+        reader: MediaReader[I, M],
+        writer: MediaWriter[O, M]) {
   import FileActor._
   import Forms._
   import Service._
   import JsonSupport._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
-
-  implicit val uploadFileFormValidator = UploadFileFormValidator
-  implicit val convertFileFormValidator = ConvertFileFormValidator
-  implicit val fileIdFormValidator = FileIdFormValidator
 
   implicit def formValidationRejectionHandler =
     RejectionHandler.newBuilder()
@@ -109,7 +117,7 @@ class Service[I, O](
         entity(as[UploadFileForm]) { form =>
           validateForm(form).apply { case UploadFileForm(description) =>
             val fileId = FileActor.generateId
-            fileManagerRegion ! SendToEntity(fileId, SetDescription(description))
+            fileRegion ! SendToEntity(fileId, SetDescription(description))
             complete(FileIdResult(fileId))
           }
         }
@@ -122,13 +130,15 @@ class Service[I, O](
             //TODO: Add checking for valid vform.fileId on fileListActor
             if (false) complete(internalError("No actor found with id: " + fileId))
             else fileUpload("file") { case (metadata, byteSource) =>
-              // TODO: Stream the bytes
+              val outlet = MediaWriter.write(output, fileId)
+              byteSource.runWith(outlet)
 
-              val fileDataF = fileManagerRegion ? SendToEntity(fileId, GetDetails)
+              val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
               onSuccess(fileDataF) {
                 case Details(filename, description) =>
-                  complete("hello")
-                  //complete(UploadResult(fileId, filename, description, streams, outputFormats))
+                  val streams = MediaReader.mediaStreams(input, fileId)
+                  val outputFormats = MediaReader.outputFormats(input, fileId)
+                  complete(UploadResult(fileId, filename, description, streams, outputFormats))
                 case _ => complete(internalError("Could not retrieve file data."))
               }
             }
@@ -146,7 +156,7 @@ class Service[I, O](
             // TODO: filename is still hardcoded here
             val outputDetails = OutputArgs("converted", format)
 
-            val conversionF = fileManagerRegion ? SendToEntity(fileId, RequestForConversion(outputDetails))
+            val conversionF = fileRegion ? SendToEntity(fileId, RequestForConversion(outputDetails))
 
             onSuccess(conversionF) {
               case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
@@ -162,7 +172,7 @@ class Service[I, O](
         val form = FileIdForm(fileId)
         validateForm(form).apply {
           case FileIdForm(fileId) =>
-            val conversionStatusF = fileManagerRegion ? SendToEntity(fileId, GetConversionStatus)
+            val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus)
 
             onSuccess(conversionStatusF) {
               case progress: Progress => complete(progress)
@@ -179,7 +189,7 @@ class Service[I, O](
         val form = FileIdForm(fileId)
         validateForm(form).apply {
           case FileIdForm(fileId) =>
-            val bytesF = fileManagerRegion ? SendToEntity(fileId, Play)
+            val bytesF = fileRegion ? SendToEntity(fileId, Play)
 
             onComplete(bytesF) {
               case Success(bytes: ByteString) => complete(bytes)
