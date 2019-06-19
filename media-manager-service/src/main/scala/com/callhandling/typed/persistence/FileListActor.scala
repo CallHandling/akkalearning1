@@ -59,7 +59,8 @@ final case class ConvertFileEvent(fileId: String) extends FileListEvent
 
 sealed trait FileListState
 final case class StorageState(fileMap: Map[String, UploadedFile])  extends FileListState {
-  def withForm(fileId: String, form: UploadFileForm): FileListState =  copy(fileMap = fileMap + (fileId -> UploadedFile(fileId, Details("", form.description), Nil, Nil)))
+  def withForm(fileId: String, form: UploadFileForm): FileListState =
+    copy(fileMap = fileMap + (fileId -> UploadedFile(fileId, Details("", form.description), Vector(), Vector())))
   def withFile(newFile: UploadedFile): FileListState = copy(fileMap.updated(newFile.fileId, newFile))
   def withS3(context: ActorContext[FileListCommand]): FileListState = {
     implicit val materializerTyped = ActorMaterializer()(context.system)
@@ -78,7 +79,7 @@ final case class AddFile(fileId: String) extends FileListResponse
 final case class GetFile(fileId: String, file: UploadedFile, fileSource: Source[ByteString, Any]) extends FileListResponse
 
 
-final case class UploadedFile(fileId: String, details: Details, streams: List[MediaStream], outputFormats: List[Format])
+final case class UploadedFile(fileId: String, details: Details, streams: Vector[MediaStream], outputFormats: Vector[Format])
 
 
 object FileListActor extends ActorSharding[FileListCommand] {

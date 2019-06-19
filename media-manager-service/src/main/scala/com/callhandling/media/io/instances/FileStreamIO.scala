@@ -33,6 +33,8 @@ class FileStreamIO(storagePath: String) {
   def filePath: MediaID => Path = Paths.get(storagePath, _)
 
   def filePathString: MediaID => String = filePath andThen pathString
+
+  def wasSuccessful(result: FileByteSource) =
 }
 
 object FileStreamIO {
