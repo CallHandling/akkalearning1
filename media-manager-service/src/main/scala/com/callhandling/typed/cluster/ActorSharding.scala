@@ -72,7 +72,7 @@ object ActorSharding {
         databaseDirectory,
         CassandraLauncher.DefaultTestConfigResource,
         clean = true,
-        port = 9042)
+        port = 9043)
 
       // shut the cassandra instance down when the JVM stops
       sys.addShutdownHook {

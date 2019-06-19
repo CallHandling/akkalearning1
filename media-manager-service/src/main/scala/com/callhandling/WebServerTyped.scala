@@ -95,7 +95,7 @@ object WebServerTyped {
                       } else {
                         fileUpload("file") {
                           case (fileInfo, fileStream) =>
-                            val future: Future[GetFile] = fileListActorEntityRef.ask(ref => AddFileCommand(FilePipeline.FileHD, fileId, fileStream, fileInfo.fileName, ref))
+                            val future: Future[GetFile] = fileListActorEntityRef.ask(ref => AddFileCommand(FilePipeline.AmazonS3, fileId, fileStream, fileInfo.fileName, ref))
                             onSuccess(future) {
                               case GetFile(_, UploadedFile(fileId, details, streams, outputFormats), _) =>
                                 complete(UploadResult(fileId, details.filename, details.description, streams, outputFormats))

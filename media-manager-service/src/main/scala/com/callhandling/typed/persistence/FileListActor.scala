@@ -3,12 +3,14 @@ package com.callhandling.typed.persistence
 
 import java.nio.file.Paths
 
+import akka.Done
+import akka.actor.typed.javadsl.Adapter
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey, EventSourcedEntity}
 import akka.cluster.typed.{Cluster, Join}
 import akka.persistence.typed.scaladsl.Effect
-import akka.stream.scaladsl.{FileIO, Source}
+import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.stream.typed.scaladsl.ActorMaterializer
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
@@ -20,9 +22,10 @@ import com.typesafe.config.Config
 
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
-import scala.util.Success
-import akka.actor.typed.scaladsl.AskPattern._
-import akka.stream.IOResult
+import scala.util.{Success, Try}
+import akka.stream.alpakka.s3.BucketAccess.{AccessDenied, AccessGranted, NotExists}
+import akka.stream.alpakka.s3.MultipartUploadResult
+import akka.stream.alpakka.s3.scaladsl.S3
 import com.callhandling.typed.persistence.FileConvertResponse.ConvertStatus
 
 sealed trait FilePipeline
@@ -30,7 +33,9 @@ case object FilePipeline {
   final case object FileHD extends FilePipeline {
     def getPath(fileId: String) = Paths.get(s"/tmp/${fileId}")
   }
-  final case object AmazonS3 extends FilePipeline
+  final case object AmazonS3 extends FilePipeline {
+    val bucketName = "audio-processor"
+  }
 }
 
 sealed trait FileListCommand
@@ -51,6 +56,18 @@ sealed trait FileListState
 final case class StorageState(fileMap: Map[String, UploadedFile])  extends FileListState {
   def withForm(fileId: String, form: UploadFileForm): FileListState =  copy(fileMap = fileMap + (fileId -> UploadedFile(fileId, Details("", form.description), Nil, Nil)))
   def withFile(newFile: UploadedFile): FileListState = copy(fileMap.updated(newFile.fileId, newFile))
+  def withS3(context: ActorContext[FileListCommand]): FileListState = {
+    implicit val materializerTyped = ActorMaterializer()(context.system)
+    implicit val executionContextTyped = context.executionContext
+    S3.checkIfBucketExists(FilePipeline.AmazonS3.bucketName).map {
+      case NotExists => S3.makeBucket(FilePipeline.AmazonS3.bucketName).map({
+        case Done => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : bucket added")
+      })
+      case AccessGranted => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : access granted")
+      case AccessDenied => context.log.info(s"${FilePipeline.AmazonS3.bucketName} : access denied")
+    }
+    this
+  }
 }
 
 sealed trait FileListResponse
@@ -83,7 +100,7 @@ object FileListActor extends ActorSharding[FileListCommand] {
           EventSourcedEntity[FileListCommand, FileListEvent, FileListState](
             entityTypeKey = entityTypeKey,
             entityId = entityId,
-            emptyState = StorageState(Map.empty),
+            emptyState = StorageState(Map.empty).withS3(context),
             commandHandler(context, shard),
             eventHandler(context))
       context.setReceiveTimeout(30.seconds, IdleFileListCommand)
@@ -93,13 +110,14 @@ object FileListActor extends ActorSharding[FileListCommand] {
 
   private def commandHandler(context: ActorContext[FileListCommand], shard: ActorRef[ClusterSharding.ShardCommand]):
     (FileListState, FileListCommand) => Effect[FileListEvent, FileListState] = { (state, command) =>
+    implicit val materializer = akka.stream.ActorMaterializer.create(Adapter.toUntyped(context.system))
     implicit val materializerTyped = ActorMaterializer()(context.system)
     implicit val executionContextTyped = context.executionContext
     state match {
       case StorageState(fileMap) =>
         command match {
           case AddFormCommand(fileId, form, replyTo) => addForm(fileId, form, replyTo)
-          case AddFileCommand(filePipeline, fileId, fileSource, fileName, replyTo) => addFile(materializerTyped, executionContextTyped, filePipeline, fileMap, fileId, fileSource, fileName, replyTo)
+          case AddFileCommand(filePipeline, fileId, fileSource, fileName, replyTo) => addFile(materializer, executionContextTyped, filePipeline, fileMap, fileId, fileSource, fileName, replyTo)
           case GetFileCommand(filePipeline, fileId, replyTo) => getFile(materializerTyped, executionContextTyped, filePipeline, fileMap, fileId, replyTo)
           case ConvertFileCommand(filePipeline, convertFileForm, replyTo) => convertFile(context, shard, materializerTyped, executionContextTyped, filePipeline, fileMap, convertFileForm, replyTo)
 //          case IdleFileListCommand => ActorSharding.passivateCluster(context, shard)
@@ -117,7 +135,7 @@ object FileListActor extends ActorSharding[FileListCommand] {
     }
   }
 
-  private def addFile(implicit actorMaterializer: ActorMaterializer, executionContext: ExecutionContextExecutor, filePipeline: FilePipeline, fileMap: Map[String,
+  private def addFile(implicit mat: akka.stream.ActorMaterializer, executionContext: ExecutionContextExecutor, filePipeline: FilePipeline, fileMap: Map[String,
       UploadedFile], fileId: String, fileSource: Source[ByteString, Any], fileName: String,
       replyTo: ActorRef[GetFile]): Effect[FileListEvent, FileListState] = {
     filePipeline match {
@@ -137,6 +155,19 @@ object FileListActor extends ActorSharding[FileListCommand] {
               replyTo ! GetFile(fileId, updatedFile, FileIO.fromPath(filePath))
             }
           }
+        }
+      }
+      case file @ FilePipeline.AmazonS3 => {
+        val sink = S3.multipartUpload(file.bucketName, fileId);
+        val writeResult: MultipartUploadResult = Await.result(fileSource.runWith(sink), 5.seconds)
+        val uploadedFile = fileMap.get(fileId).get
+        val details = Details(fileName, uploadedFile.details.description)
+        val streams = StreamDetails.extractFrom(writeResult.location.path.toString())
+        val outputFormats = Converter.getOutputFormats(writeResult.location.path.toString())
+        val updatedFile = UploadedFile(fileId, details, streams, outputFormats)
+        val evt = AddFileEvent(fileId, updatedFile)
+        Effect.persist(evt).thenRun { _ =>
+          replyTo ! GetFile(fileId, updatedFile, Await.result(S3.download(file.bucketName, fileId).runWith(Sink.head), 5.seconds).get._1)
         }
       }
     }
@@ -167,10 +198,10 @@ object FileListActor extends ActorSharding[FileListCommand] {
         val fileSource = FileIO.fromPath(file.getPath(convertFileForm.fileId))
         fileConvertActorEntityRef ! FileConvertCommand.Start(fileSource, convertFileForm)
 
-        Thread.sleep(3000L)
         val future: Future[ConvertStatus] = fileConvertActorEntityRef.ask(ref => FileConvertCommand.Status(ref))
         val convertStatus = Await.result(future, 3.seconds)
-        println("conversionStatus: "+ convertStatus.fileId +" : "+ convertStatus.percentComplete)
+        context.log.info("conversionStatus: "+ convertStatus.fileId +" : "+ convertStatus.percentComplete)
+
         replyTo ! AddFile(id)
         Effect.none
       }

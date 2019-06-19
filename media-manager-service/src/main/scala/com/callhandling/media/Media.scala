@@ -104,6 +104,83 @@ object StreamDetails {
     }.toList
   }
 
+  def extractFrom(path: String): List[StreamDetails] = {
+
+    val result = FFprobe.atPath(FFmpegConf.Bin)
+      .setInput(path)
+      .setShowStreams(true)
+      .execute()
+
+    asScalaIterator[Stream](result.getStreams.iterator()).map { stream =>
+      StreamDetails(index = stream.getIndex,
+        profile = Option(stream.getProfile),
+        codec = Codec(
+          name = Option(stream.getCodecName),
+          longName = Option(stream.getCodecLongName),
+          timeBase = stream.getCodecTimeBase,
+          tag = Option(stream.getCodecTag),
+          tagString = Option(stream.getCodecTagString)
+        ),
+        extraData = Option(stream.getExtradata),
+        dimensions = Dimensions(
+          width = Option(stream.getWidth),
+          height = Option(stream.getHeight)
+        ),
+        codeDimensions = Dimensions(
+          width = Option(stream.getCodedWidth),
+          height = Option(stream.getCodedHeight)
+        ),
+        hasBFrames = Option(stream.hasBFrames),
+        aspectRatio = AspectRatio(
+          sample = stream.getSampleAspectRatio,
+          display = stream.getDisplayAspectRatio
+        ),
+        pixFmt = Option(stream.getPixFmt),
+        level = Option(stream.getLevel),
+        color = Color(
+          range = Option(stream.getColorRange),
+          space = Option(stream.getColorSpace),
+          transfer = Option(stream.getColorTransfer),
+          primaries = Option(stream.getColorPrimaries)
+        ),
+        chromaLocation = Option(stream.getChromaLocation),
+        fieldOrder = Option(stream.getFieldOrder),
+        refs = Option(stream.getRefs),
+        samples = Samples(
+          fmt = Option(stream.getSampleFmt),
+          rate = Option(stream.getSampleRate)
+        ),
+        channel = Channel(
+          channels = Option(stream.getChannels),
+          layout = Option(stream.getChannelLayout),
+        ),
+        bits = Bits(
+          perSample = Option(stream.getBitsPerSample),
+          rate = Option(stream.getBitRate),
+          maxRate = Option(stream.getMaxBitRate),
+          perRawSample = Option(stream.getBitsPerRawSample)
+        ),
+        id = Option(stream.getId),
+        frameRates = FrameRates(
+          r = stream.getRFrameRate,
+          avg = stream.getAvgFrameRate
+        ),
+        time = Time(
+          code = Option(stream.getTimecode),
+          base = Option(stream.getTimeBase),
+          startPts = Option(stream.getStartPts),
+          startTime = Option(stream.getStartTime),
+          duration = Option(stream.getDuration),
+          durationTs = Option(stream.getDurationTs)
+        ),
+        nb = Nb(
+          frames = Option(stream.getNbFrames),
+          readFrames = Option(stream.getNbReadFrames),
+          readPackets = Option(stream.getNbReadPackets)
+        ))
+    }.toList
+  }
+
   final case class Codec(name: Option[String],
     longName: Option[String],
     timeBase: Option[Rational],

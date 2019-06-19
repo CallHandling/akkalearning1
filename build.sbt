@@ -13,14 +13,15 @@ lazy val v = new {
   val jackson = "2.9.9"
 }
 
-
+// This is an application with a main method
+scalaJSUseMainModuleInitializer := true
 javaOptions in Gatling := overrideDefaultJavaOptions("-Xms1024m", "-Xmx2048m")
 lazy val `media-file-encoder` = project.in(file("."))
   .aggregate(`media-manager-service`, `media-manager-state`, `media-manager-app`)
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(ProtobufPlugin)
   .enablePlugins(GatlingPlugin)
-
+  .enablePlugins(ScalaJSPlugin)
 
 lazy val `media-manager-service` = project
   .dependsOn(`media-manager-state`)
@@ -53,6 +54,8 @@ lazy val `media-manager-service` = project
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
       "com.fasterxml.jackson.core" % "jackson-databind" % v.jackson,
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % v.jackson,
+
+      "com.lightbend.akka" %% "akka-stream-alpakka-s3" % "1.0.2",
     )
   )
 
@@ -81,6 +84,6 @@ lazy val `media-manager-app` = project
   .dependsOn(`media-manager-service`)
   .settings(
     libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % v.scalatest % Test
+//      "org.scala-js" %%% "scalajs-dom" % "0.9.7"
     )
   )
