@@ -4,14 +4,12 @@ import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.callhandling.Forms.UploadFileForm
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.actors.StreamActor.StreamInitialized
-import com.callhandling.media.Converter.{EmptyProgress, OutputDetails, ProgressDetails}
 import com.callhandling.media.Formats.Format
 import com.callhandling.media.StreamDetails
+import com.callhandling.media.converters._
 
 object FileActor {
   val RegionName = "FileManager"
-  val NumberOfShards = 50
 
   def props: Props = Props[FileActor]
 
@@ -24,143 +22,64 @@ object FileActor {
   case object Ready extends State
   case object Converting extends State
 
+  // Streaming messages
+  case object StreamInitialized
+  case object StreamCompleted
+  final case class StreamFailure(ex: Throwable)
+
   // Events
-  final case class SetDetails(id: String, details: Details)
-  final case class SetFormDetails(id: String, uploadFileForm: UploadFileForm)
+  final case class SetDetails(filename: String, description: String)
+  final case class SetDescription(description: String)
   final case class SetUpStream(system: ActorSystem)
-  final case class SetStreamInfo(streams: List[StreamDetails], outputFormats: List[Format])
-  case object GetFileData
+  case object GetDetails
   case object Play
 
   // Conversion Messages/Events
-  final case class RequestForConversion(outputDetails: OutputDetails)
-  final case class Convert(outputDetails: OutputDetails, timeDuration: Float)
+  final case class RequestForConversion(outputArgs: OutputArgs)
+  final case class Convert(outputArgs: OutputArgs, timeDuration: Float)
   case object CompleteConversion
   case object GetConversionStatus
 
   // Non-command messages
   final case class ConversionStarted(either: Either[String, String])
 
-  /**
-    * Send this message to the shard region as opposed to the entity itself.
-    * The shard region will find the entity, or create one if it doesn't exist,
-    * and forward the message to it.
-    * @param id The ID of the entity.
-    * @param message The message the shard region will send to the entity.
-    */
-  final case class SendToEntity(id: String, message: Any)
-
   // Data
   sealed trait Data
   final case class Details(filename: String, description: String) extends Data
-  final case class FileData(
-      id: String,
-      details: Details,
-      streams: List[StreamDetails],
-      outputFormats: List[Format],
-      streamRef: ActorRef) extends Data
-  final case class ConversionData(fileData: FileData, progress: ProgressDetails) extends Data
-
-  def shardRegion(system: ActorSystem): ActorRef = ClusterSharding(system).start(
-    typeName = RegionName,
-    entityProps = Props[FileActor],
-    settings = ClusterShardingSettings(system),
-    extractEntityId = extractEntityId,
-    extractShardId = extractShardId)
-
-  val extractEntityId: ShardRegion.ExtractEntityId = {
-    case SendToEntity(id, message) => (id, message)
-  }
-
-  val extractShardId: ShardRegion.ExtractShardId = {
-    case SendToEntity(id, _) => (id.hashCode % NumberOfShards).toString
-  }
 }
 
-class FileActor extends FSM[State, Data] with Stash with ActorLogging {
+class FileActor(id: String) extends FSM[State, Data] with Stash with ActorLogging {
   import FileActor._
 
-  startWith(Idle, FileData("", Details("", ""), Nil, Nil, ActorRef.noSender))
+  startWith(Idle, Details("", ""))
 
   when(Idle) {
-    case Event(SetUpStream(system), fileData: FileData) =>
-      val streamRef = context.actorOf(StreamActor.props(system))
-      sender() ! streamRef
-      stay.using(fileData.copy(streamRef = streamRef))
-    case Event(StreamInitialized(filename), fileData: FileData) =>
-      goto(Uploading).using(fileData.copy(details = Details(filename, fileData.details.description)))
+    case Event(StreamInitialized, _) => goto(Uploading)
   }
 
   when(Uploading) {
-    // We assume that uploading is done when the stream information is extracted or available.
-    case Event(SetStreamInfo(streams, outputFormats), fileData: FileData) =>
-      unstashAll()
-      goto(Ready).using(fileData.copy(streams = streams, outputFormats = outputFormats))
+    case Event(StreamCompleted, _) => goto(Ready)
   }
 
   when(Ready) {
-    case Event(GetFileData, fileData: FileData) =>
-      sender() ! fileData
-      stay
-    case Event(msg @ RequestForConversion(OutputDetails(filename, _)), fileData: FileData) =>
-      log.info("Preparing for conversion...")
-
-      // The details to be sent should be updated according to the output details
-      // for the converted file.
-      val newDetails = Details(
-        filename = filename,
-        description = fileData.details.description)
-
-      fileData.streamRef forward (msg, fileData.copy(details = newDetails))
-      stay
-    case Event(msg: Convert, fileData: FileData) =>
-      log.info("Converting...")
-      fileData.streamRef forward msg
-      goto(Converting)
-    case Event(Play, fileData: FileData) =>
-      log.info("Playing...")
-      fileData.streamRef forward Play
-      stay
-  }
-
-  when(Converting) {
-    case Event(CompleteConversion, ConversionData(fileData, _)) =>
-      log.info("Conversion Completed.")
-      goto(Ready).using(fileData)
-    case Event(progressDetails: ProgressDetails, fileData: FileData) =>
-      logProgressAndStay(ConversionData(fileData, progressDetails))
-    case Event(progressDetails: ProgressDetails, conversionData: ConversionData) =>
-      logProgressAndStay(conversionData.copy(progress = progressDetails))
-    case Event(GetConversionStatus, ConversionData(_, progress)) =>
-      sender() ! progress
+    case Event(GetDetails, details: Details) =>
+      sender() ! details
       stay
   }
 
   whenUnhandled {
-    case Event(SetFormDetails(id, form), fileData: FileData) =>
-      val updated = fileData.copy(id = id, details = Details(fileData.details.filename, form.description))
-      sender() ! updated
-      stay.using(updated)
-    case Event(SetDetails(id, details), fileData: FileData) =>
-      stay.using(fileData.copy(details = details))
-    case Event(GetFileData, _) =>
+    case Event(SetDescription(description), details: Details) =>
+      stay.using(details.copy(description = description))
+    case Event(SetDetails(filename, description), _) =>
+      stay.using(Details(filename, description))
+    case Event(GetDetails, _) =>
       stashAndStay("retrieval")
-    case Event(_: Convert, _) | Event(RequestForConversion(_), _) =>
-      stashAndStay("conversion")
-    case Event(GetConversionStatus, _) =>
-      sender() ! EmptyProgress
-      stay
   }
 
   private def stashAndStay(action: String) = {
     log.info(s"Data not ready for $action yet. Stashing the request for now.")
     stash()
     stay
-  }
-
-  private def logProgressAndStay(conversionData: ConversionData) = {
-    log.info("Progress Details: {}", conversionData.progress)
-    stay.using(conversionData)
   }
 
   initialize()
