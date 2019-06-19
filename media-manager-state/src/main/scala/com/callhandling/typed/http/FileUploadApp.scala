@@ -73,7 +73,7 @@ object FileUploadApp {
           }
 
         val bindingFuture = Http().bindAndHandle(route, "localhost", 8000)
-        context.log.info("Server online at http://localhost:8080/\nPress RETURN to stop...")
+        context.log.info("Server online at http://localhost:8000/\nPress RETURN to stop...")
         StdIn.readLine() // let it run until user presses return
         bindingFuture
           .flatMap(_.unbind()) // trigger unbinding from the port

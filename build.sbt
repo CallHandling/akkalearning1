@@ -18,6 +18,7 @@ javaOptions in Gatling := overrideDefaultJavaOptions("-Xms1024m", "-Xmx2048m")
 lazy val `media-file-encoder` = project.in(file("."))
   .aggregate(`media-manager-service`, `media-manager-state`, `media-manager-app`)
   .enablePlugins(JavaAppPackaging)
+  // issue: double entry on compiled protobuf source folders, remove the other one
   .enablePlugins(ProtobufPlugin) // protobuf:protobufGenerate
   .enablePlugins(GatlingPlugin) // gatling:test
   .enablePlugins(ScalaJSPlugin)
@@ -88,8 +89,6 @@ lazy val `media-manager-state` = project
 
       "ws.schild" % "jave-core" % "2.4.6",
       "ws.schild" % "jave-native-linux64" % "2.4.6",
-
-      "com.google.protobuf" % "protobuf-java" % "3.8.0"
     )
   )
   .enablePlugins(ProtobufPlugin)
