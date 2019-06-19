@@ -13,8 +13,8 @@ import akka.stream.typed.scaladsl.ActorMaterializer
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
 import com.callhandling.actors.FileActor.Details
-import com.callhandling.media.Formats.Format
-import com.callhandling.media.StreamDetails
+import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.MediaStream
 import com.callhandling.typed.cluster.ActorSharding
 import com.typesafe.config.Config
 
@@ -23,7 +23,7 @@ import scala.concurrent.duration._
 import scala.util.Success
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.stream.IOResult
-import com.callhandling.media.converters.Converter
+import com.callhandling.media.converters.{Converter, Formats}
 import com.callhandling.typed.persistence.FileConvertResponse.ConvertStatus
 
 sealed trait FilePipeline
@@ -59,7 +59,7 @@ final case class AddFile(fileId: String) extends FileListResponse
 final case class GetFile(fileId: String, file: UploadedFile, fileSource: Source[ByteString, Any]) extends FileListResponse
 
 
-final case class UploadedFile(fileId: String, details: Details, streams: List[StreamDetails], outputFormats: List[Format])
+final case class UploadedFile(fileId: String, details: Details, streams: List[MediaStream], outputFormats: List[Format])
 
 
 object FileListActor extends ActorSharding[FileListCommand] {
@@ -130,8 +130,8 @@ object FileListActor extends ActorSharding[FileListCommand] {
           case Success(_) => {
             val uploadedFile = fileMap.get(fileId).get
             val details = Details(fileName, uploadedFile.details.description)
-            val streams = StreamDetails.extractFrom(filePath.toAbsolutePath.toString)
-            val outputFormats = Converter.getOutputFormats(filePath)
+            val streams = MediaStream.extractFrom(filePath.toAbsolutePath.toString)
+            val outputFormats = Formats.outputFormatsOf(filePath)
             val updatedFile = UploadedFile(fileId, details, streams, outputFormats)
             val evt = AddFileEvent(fileId, updatedFile)
             Effect.persist(evt).thenRun { _ =>

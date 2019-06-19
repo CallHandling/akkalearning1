@@ -4,13 +4,13 @@ import akka.actor.{ActorLogging, ActorRef, FSM, Props}
 import akka.stream.ActorMaterializer
 import com.callhandling.media.OutputFormat
 import com.callhandling.media.converters._
-import com.callhandling.media.io.{InputReader, OutputWriter}
+import com.callhandling.media.io.{MediaReader, MediaWriter}
 import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
 
 object AudioProcessor {
   def props[I, O, M](input: I, output: O, ackActorRef: ActorRef)
-      (implicit reader: InputReader[I, M], writer: OutputWriter[O, M]): Props =
+      (implicit reader: MediaReader[I, M], writer: MediaWriter[O, M]): Props =
     Props(new AudioProcessor(input, output, ackActorRef))
 
   sealed trait ConversionStatus
@@ -50,7 +50,7 @@ object AudioProcessor {
 }
 
 class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
-    (implicit reader: InputReader[I, M], writer: OutputWriter[O, M])
+    (implicit reader: MediaReader[I, M], writer: MediaWriter[O, M])
     extends FSM[State, Data] with ActorLogging {
   implicit val mat: ActorMaterializer = ActorMaterializer()
 
@@ -123,7 +123,7 @@ class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
       nextStateData match {
         case Convertible(id, conversionSet, timeDuration) => conversionSet.foreach {
           case Conversion(outputArgs, Converting) =>
-            lazy val inlet = InputReader.read(input, id)
+            lazy val inlet = MediaReader.read(input, id)
             val worker = context.actorOf(Worker.props(id, inlet, output))
             worker ! Convert(outputArgs, timeDuration)
         }
@@ -137,7 +137,7 @@ class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
         option.map(Right(_)) getOrElse Left(alternative)
     }
 
-    val mediaStreams = InputReader.extractStreamDetails(input, id)
+    val mediaStreams = MediaReader.mediaStreams(input, id)
 
     for {
       // Get the media stream information.

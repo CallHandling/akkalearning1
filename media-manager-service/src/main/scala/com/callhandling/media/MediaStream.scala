@@ -3,28 +3,26 @@ package com.callhandling.media
 import java.nio.file.{Path}
 
 import akka.util.ByteString
-import com.callhandling.media.StreamDetails._
+import com.callhandling.media.MediaStream._
 import com.callhandling.util.FileUtil
 import com.github.kokorin.jaffree.ffprobe.{FFprobe, Stream}
 import com.github.kokorin.jaffree.{Rational => JRational}
 
 import scala.collection.JavaConverters._
 
-object StreamDetails {
-  type Streams = List[StreamDetails]
-
+object MediaStream {
   implicit def jRationalToRational(jRational: JRational): Option[Rational] =
     Option(jRational).map(rational =>
       Rational(rational.numerator, rational.denominator))
 
-  def extractFrom(path: String): Streams = {
+  def extractFrom(path: String): Vector[MediaStream] = {
     val result = FFprobe.atPath(FFmpegConf.Bin)
       .setInput(path)
       .setShowStreams(true)
       .execute()
 
     asScalaIterator[Stream](result.getStreams.iterator()).map { stream =>
-      StreamDetails(index = stream.getIndex,
+      MediaStream(index = stream.getIndex,
         profile = Option(stream.getProfile),
         codec = Codec(
           name = Option(stream.getCodecName),
@@ -90,7 +88,7 @@ object StreamDetails {
           readFrames = Option(stream.getNbReadFrames),
           readPackets = Option(stream.getNbReadPackets)
         ))
-    }.toList
+    }.toVector
   }
 
   final case class Codec(name: Option[String],
@@ -129,7 +127,7 @@ object StreamDetails {
   final case class Channel(channels: Option[Int], layout: Option[String])
 }
 
-final case class StreamDetails(index: Int,
+final case class MediaStream(index: Int,
   //tag: String => Option[String],
   codec: Codec,
   profile: Option[String],
