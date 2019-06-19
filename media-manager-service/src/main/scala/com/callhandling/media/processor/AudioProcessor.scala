@@ -9,14 +9,9 @@ import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
 
 object AudioProcessor {
-  def props[I, O, M](
-      id: String,
-      outputArgsSet: List[OutputArgs],
-      input: I,
-      output: O,
-      ackActorRef: ActorRef)
+  def props[I, O, M](input: I, output: O, ackActorRef: ActorRef)
       (implicit reader: InputReader[I, M], writer: OutputWriter[O, M]): Props =
-    Props(new AudioProcessor(id, outputArgsSet, input, output, ackActorRef))
+    Props(new AudioProcessor(input, output, ackActorRef))
 
   sealed trait ConversionStatus
   case object Success extends ConversionStatus
@@ -29,12 +24,16 @@ object AudioProcessor {
 
   // FSM Data
   sealed trait Data
-  case object EmptyData extends Data
-  final case class NonConvertible(reason: ConversionError) extends Data
-  final case class Convertible(conversionSet: List[Conversion], timeDuration: Float) extends Data
+  final case class AudioData(id: String, outputArgsSet: Vector[OutputArgs]) extends Data
+  final case class Convertible(
+      id: String,
+      conversionSet: Vector[Conversion],
+      timeDuration: Float) extends Data
 
   final case class Conversion(outputArgs: OutputArgs, status: ConversionStatus)
 
+  final case class SetId(id: String)
+  final case class SetOutputArgsSet(outputArgsSet: Vector[OutputArgs])
   final case class StartConversion(redoFailed: Boolean)
 
   /**
@@ -50,30 +49,31 @@ object AudioProcessor {
   final case class FormatProgress(format: OutputFormat, progress: Progress)
 }
 
-class AudioProcessor[I, O, M](
-    id: String,
-    outputArgsSet: List[OutputArgs],
-    input: I,
-    output: O,
-    ackActorRef: ActorRef)
+class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
     (implicit reader: InputReader[I, M], writer: OutputWriter[O, M])
     extends FSM[State, Data] with ActorLogging {
-  lazy val inlet = InputReader.read(input, id)
-  lazy val mediaStreams = InputReader.extractStreamDetails(input, id)
-
   implicit val mat: ActorMaterializer = ActorMaterializer()
 
-  startWith(Ready, EmptyData)
+  startWith(Ready, AudioData("", Vector()))
 
-  when(Ready) {
-    case Event(StartConversion(_), EmptyData) =>
-      val data = prepareConversion match {
-        case Left(error) => NonConvertible(error)
+  def setData: StateFunction = {
+    case Event(SetId(id), data: AudioData) =>
+      stay.using(data.copy(id = id))
+    case Event(SetOutputArgsSet(outputArgsSet), data: AudioData) =>
+      stay.using(data.copy(outputArgsSet = outputArgsSet))
+  }
+
+  def startConversion: StateFunction = {
+    case Event(StartConversion(_), data @ AudioData(id, outputArgsSet)) =>
+      val newData = prepareConversion(id) match {
+        case Left(error) =>
+          ackActorRef ! error
+          data
         case Right(timeDuration) =>
-          Convertible(outputArgsSet.map(Conversion(_, Converting)), timeDuration)
+          Convertible(id, outputArgsSet.map(Conversion(_, Converting)), timeDuration)
       }
-      goto(Converting).using(data)
-    case Event(StartConversion(redo), data @ Convertible(conversionSet, _)) =>
+      goto(Converting).using(newData)
+    case Event(StartConversion(redo), data @ Convertible(_, conversionSet, _)) =>
       def startConversion: Conversion => Conversion = _.copy(status = Converting)
 
       val convertedFormats = conversionSet.map {
@@ -85,8 +85,10 @@ class AudioProcessor[I, O, M](
       goto(Converting).using(data.copy(conversionSet = convertedFormats))
   }
 
+  when(Ready)(setData orElse startConversion)
+
   when(Converting) {
-    case Event(FormatConversionStatus(format, status), data @ Convertible(conversionSet, _)) =>
+    case Event(FormatConversionStatus(format, status), data @ Convertible(id, conversionSet, _)) =>
       val newConversionSet = conversionSet.map {
         case conversion @ Conversion(OutputArgs(_, `format`), _) =>
           conversion.copy(status = status)
@@ -115,11 +117,27 @@ class AudioProcessor[I, O, M](
       stay
   }
 
-  def prepareConversion: Either[ConversionError, Float] = {
+  onTransition {
+    case Ready -> Converting =>
+      log.info("Converting...")
+      nextStateData match {
+        case Convertible(id, conversionSet, timeDuration) => conversionSet.foreach {
+          case Conversion(outputArgs, Converting) =>
+            lazy val inlet = InputReader.read(input, id)
+            val worker = context.actorOf(Worker.props(id, inlet, output))
+            worker ! Convert(outputArgs, timeDuration)
+        }
+      }
+    case Converting -> Ready => log.info("Conversion completed.")
+  }
+
+  def prepareConversion(id: String): Either[ConversionError, Float] = {
     implicit class OptionToEither[S](option: Option[S]) {
       def asEither[E](alternative: => E): Either[E, S] =
         option.map(Right(_)) getOrElse Left(alternative)
     }
+
+    val mediaStreams = InputReader.extractStreamDetails(input, id)
 
     for {
       // Get the media stream information.
@@ -129,19 +147,6 @@ class AudioProcessor[I, O, M](
       // progress percentage.
       timeDuration <- mediaStream.time.duration.asEither(StreamInfoIncomplete)
     } yield timeDuration
-  }
-
-  onTransition {
-    case Ready -> Converting =>
-      log.info("Converting...")
-      nextStateData match {
-        case Convertible(conversionSet, timeDuration) => conversionSet.foreach {
-          case Conversion(outputArgs, Converting) =>
-            val worker = context.actorOf(Worker.props(id, inlet, output))
-            worker ! Convert(outputArgs, timeDuration)
-        }
-      }
-    case Converting -> Ready => log.info("Conversion completed.")
   }
 
   initialize()

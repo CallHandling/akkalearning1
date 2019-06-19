@@ -29,7 +29,7 @@ object FileActor {
 
   // Events
   final case class SetDetails(filename: String, description: String)
-  final case class SetFormDetails(id: String, uploadFileForm: UploadFileForm)
+  final case class SetDescription(description: String)
   final case class SetUpStream(system: ActorSystem)
   case object GetDetails
   case object Play
@@ -68,6 +68,8 @@ class FileActor(id: String) extends FSM[State, Data] with Stash with ActorLoggin
   }
 
   whenUnhandled {
+    case Event(SetDescription(description), details: Details) =>
+      stay.using(details.copy(description = description))
     case Event(SetDetails(filename, description), _) =>
       stay.using(Details(filename, description))
     case Event(GetDetails, _) =>

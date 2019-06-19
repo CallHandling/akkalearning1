@@ -38,7 +38,6 @@ object ValidationUtils {
 
 
 object Forms {
-
   final case class UploadFileForm(description: String)
   object UploadFileFormValidator extends Validator[UploadFileForm] {
     override def apply(model: UploadFileForm): Seq[FieldErrorInfo] = {

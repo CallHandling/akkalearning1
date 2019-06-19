@@ -24,7 +24,6 @@ import scala.io.StdIn
 import scala.util.Success
 
 object Service {
-
   final case class FileIdResult(fileId: String)
   final case class UploadResult(
       fileId: String,
@@ -74,18 +73,18 @@ object Service {
 
   final case class MediaFileDetail(description: String)
 
-  def apply(fileManagerRegion: ActorRef)(
-      implicit system: ActorSystem,
-      materializer: ActorMaterializer,
-      timeout: Timeout) =
-    new Service(fileManagerRegion)
+  def apply[I, O](
+      fileRegion: ActorRef,
+      audioProcessorRegion: ActorRef,
+      input: I,
+      output: O)
+      (implicit system: ActorSystem, mat: ActorMaterializer, timeout: Timeout) =
+    new Service(fileRegion, audioProcessorRegion, input, output)
 }
 
-class Service(fileManagerRegion: ActorRef) (
-    implicit system: ActorSystem,
-    materializer: ActorMaterializer,
-    timeout: Timeout) {
-
+class Service[I, O](
+    fileManagerRegion: ActorRef, audioProcessorRegion: ActorRef, input: I, output: O)
+    (implicit system: ActorSystem, mat: ActorMaterializer, timeout: Timeout) {
   import FileActor._
   import Forms._
   import Service._
@@ -108,15 +107,10 @@ class Service(fileManagerRegion: ActorRef) (
     pathEndOrSingleSlash {
       post {
         entity(as[UploadFileForm]) { form =>
-          validateForm(form).apply {
-            vform =>
-              val fileId = FileActor.generateId
-              val fileDataF = fileManagerRegion ? SendToEntity(fileId, SetFormDetails(fileId, vform))
-              onSuccess(fileDataF) {
-                case FileData(id, _, _, _, _) =>
-                  complete(FileIdResult(id))
-                case _ => complete(internalError("Could not retrieve file data."))
-              }
+          validateForm(form).apply { case UploadFileForm(description) =>
+            val fileId = FileActor.generateId
+            fileManagerRegion ! SendToEntity(fileId, SetDescription(description))
+            complete(FileIdResult(fileId))
           }
         }
       }
@@ -124,26 +118,18 @@ class Service(fileManagerRegion: ActorRef) (
     withoutSizeLimit {
       path(Remaining) { fileId =>
         put {
-          val form = FileIdForm(fileId)
-          validateForm(form).apply {
-            vform => {
-              //TODO: Add checking for valid vform.fileId on fileListActor
-              if (false) {
-                complete(internalError("No actor found with id: " + vform.fileId))
-              } else {
-                fileUpload("file") {
-                  case (metadata, byteSource) =>
-                    val fileSink = StreamActor.createSink(
-                      system, fileManagerRegion, fileId, metadata.fileName)
-                    byteSource.runWith(fileSink)
+          validateForm(FileIdForm(fileId)).apply { _ =>
+            //TODO: Add checking for valid vform.fileId on fileListActor
+            if (false) complete(internalError("No actor found with id: " + fileId))
+            else fileUpload("file") { case (metadata, byteSource) =>
+              // TODO: Stream the bytes
 
-                    val fileDataF = fileManagerRegion ? SendToEntity(fileId, GetDetails)
-                    onSuccess(fileDataF) {
-                      case FileData(id, Details(filename, description), streams, outputFormats, _) =>
-                        complete(UploadResult(id, filename, description, streams, outputFormats))
-                      case _ => complete(internalError("Could not retrieve file data."))
-                    }
-                }
+              val fileDataF = fileManagerRegion ? SendToEntity(fileId, GetDetails)
+              onSuccess(fileDataF) {
+                case Details(filename, description) =>
+                  complete("hello")
+                  //complete(UploadResult(fileId, filename, description, streams, outputFormats))
+                case _ => complete(internalError("Could not retrieve file data."))
               }
             }
           }

@@ -39,11 +39,11 @@ final case object FileConvertState {
   final case class InProgress(fileId: String, form: ConvertFileForm, percentComplete: Float) extends FileConvertState {
     def start(materializer: ActorMaterializer): FileConvertState = {
       val filePath = FilePipeline.FileHD.getPath(fileId)
-      Converter.convert(materializer, FileIO.fromPath(filePath), 42625.9375f, form) { progress =>
+      /*Converter.convert(materializer, FileIO.fromPath(filePath), 42625.9375f, form) { progress =>
         println(progress.percent)
         copy(percentComplete = progress.percent)
       }
-      if(percentComplete == 100) Complete(fileId, form) else this
+      if(percentComplete == 100) Complete(fileId, form) else*/ this
     }
   }
   final case class Complete(fileId: String, form: ConvertFileForm) extends FileConvertState

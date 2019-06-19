@@ -23,6 +23,7 @@ import scala.concurrent.duration._
 import scala.util.Success
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.stream.IOResult
+import com.callhandling.media.converters.Converter
 import com.callhandling.typed.persistence.FileConvertResponse.ConvertStatus
 
 sealed trait FilePipeline

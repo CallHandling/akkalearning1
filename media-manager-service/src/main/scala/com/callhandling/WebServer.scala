@@ -11,7 +11,7 @@ import com.callhandling.actors._
 import com.callhandling.media.converters.OutputArgs
 import com.callhandling.media.io.instances.FileStreamIO
 import com.callhandling.media.processor.AudioProcessor
-import com.callhandling.media.processor.AudioProcessor.StartConversion
+import com.callhandling.media.processor.AudioProcessor.{SetId, SetOutputArgsSet, StartConversion}
 
 import scala.concurrent.duration._
 
@@ -28,15 +28,15 @@ object WebServer {
     val fileId = "foo.mp3"
     val storagePath = "/home/melvic/Music"
     val fileStreamIO = new FileStreamIO(storagePath)
-    val formats = "wav" :: "flv" :: Nil
+    val formats = Vector("wav", "flv")
 
     val outputArgsSet = formats.map(OutputArgs("sample", _))
     val region = shardRegion(system, AudioProcessor.props(
-      id = fileId,
-      outputArgsSet = outputArgsSet,
       input = fileStreamIO,
       output = fileStreamIO,
       ackActorRef = TestProbe().ref))
+    region ! SendToEntity(fileId, SetId(fileId))
+    region ! SendToEntity(fileId, SetOutputArgsSet(outputArgsSet))
     region ! SendToEntity(fileId, StartConversion(true))
   }
 }
