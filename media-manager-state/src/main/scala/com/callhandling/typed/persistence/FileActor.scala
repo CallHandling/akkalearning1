@@ -13,11 +13,7 @@ import com.typesafe.config.Config
 import ws.schild.jave.{AudioInfo, MultimediaInfo, MultimediaObject, VideoInfo, VideoSize}
 
 import scala.concurrent.duration._
-//import FileActorMessage._
-//import FileActorMessage.Command._
-//import FileActorMessage.Event._
-//import FileActorMessage.State._
-//import FileActorMessage.Response._
+
 
 sealed trait FileCommand
 final case object IdleFileCommand extends FileCommand

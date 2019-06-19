@@ -15,7 +15,7 @@ sealed trait FileListCommand
 final case object IdleFileListCommand extends FileListCommand
 final case object PassivateFileListCommand extends FileListCommand
 final case class AddFileListCommand(uploadedFile: UploadedFile, replyTo: ActorRef[AddFile]) extends FileListCommand
-final case class GetFileListCommand(fileId: String, replyTo: ActorRef[GetFile]) extends FileListCommand
+final case class GetFileListCommand(fileId: String, replyTo: ActorRef[ReturnFile]) extends FileListCommand
 
 sealed trait FileListEvent
 final case class AddEvent(fileId: String, file: UploadedFile) extends FileListEvent
@@ -29,7 +29,7 @@ final case class StorageState(fileMap: Map[String, UploadedFile])  extends FileL
 
 sealed trait FileListResponse
 final case class AddFile(fileId: String) extends FileListResponse
-final case class GetFile(fileId: String, file: Option[UploadedFile]) extends FileListResponse
+final case class ReturnFile(fileId: String, file: Option[UploadedFile]) extends FileListResponse
 
 
 object FileListActor extends ActorSharding[FileListCommand] {
@@ -62,7 +62,7 @@ object FileListActor extends ActorSharding[FileListCommand] {
     }
   }
 
-  private def commandHandler(context: ActorContext[FileListCommand], shard: ActorRef[ClusterSharding.ShardCommand]): 
+  private def commandHandler(context: ActorContext[FileListCommand], shard: ActorRef[ClusterSharding.ShardCommand]):
     (FileListState, FileListCommand) => Effect[FileListEvent, FileListState] = { (state, command) =>
     state match {
       case InitFileListState(_) =>
@@ -90,9 +90,9 @@ object FileListActor extends ActorSharding[FileListCommand] {
     }
   }
 
-  private def getFile(fileMap: Map[String, UploadedFile], fileId: String, replyTo: ActorRef[GetFile]): Effect[FileListEvent, FileListState] = {
+  private def getFile(fileMap: Map[String, UploadedFile], fileId: String, replyTo: ActorRef[ReturnFile]): Effect[FileListEvent, FileListState] = {
     val uploadedFile = fileMap.get(fileId)
-    replyTo ! GetFile(fileId, uploadedFile)
+    replyTo ! ReturnFile(fileId, uploadedFile)
     Effect.none
   }
 

@@ -7,11 +7,6 @@ import akka.actor.typed.javadsl.Adapter
 import akka.serialization.{BaseSerializer, SerializerWithStringManifest}
 import com.callhandling.typed.persistence.protobuf.FileActorProto
 
-//import FileActorMessage._
-//import FileActorMessage.Command._
-//import FileActorMessage.Event._
-//import FileActorMessage.State._
-//import FileActorMessage.Response._
 
 class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends SerializerWithStringManifest with BaseSerializer {
 
@@ -55,7 +50,7 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
     case a: FinishState     ⇒ finishStateToBinary(a)
     case a: UploadFile ⇒ uploadFileToBinary(a)
     case a: UploadInProgressCommand  ⇒ uploadInProgressCommandToBinary(a)
-    case a: UploadedFile     ⇒ uploadedFileBinary(a)
+    case a: UploadedFile     ⇒ uploadedFileToBinary(a)
     case a: UploadedFileCommand   ⇒ uploadedFileCommandToBinary(a)
     case a: UploadEvent ⇒ uploadEventToBinary(a)
     case a: UploadedEvent   ⇒ uploadedEventToBinary(a)
@@ -146,11 +141,15 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
     builder.build().toByteArray()
   }
 
-  private def uploadedFileBinary(a: UploadedFile): Array[Byte] = {
+  def uploadedFileToProto(a: UploadedFile): FileActorProto.UploadedFile.Builder  = {
     val builder = FileActorProto.UploadedFile.newBuilder()
     builder.setFileId(a.fileId).setByteString(a.byteString)
     a.multimediaFileInfo.map(o => builder.setFileInfo(multimediaFileInfoToProto(o)))
-    builder.build().toByteArray()
+    builder
+  }
+
+  private def uploadedFileToBinary(a: UploadedFile): Array[Byte] = {
+    uploadedFileToProto(a).build().toByteArray()
   }
 
   private def uploadedFileCommandToBinary(a: UploadedFileCommand): Array[Byte] = {
@@ -238,6 +237,10 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
 
   private def uploadedFileFromBinary(bytes: Array[Byte]): UploadedFile = {
     val a = FileActorProto.UploadedFile.parseFrom(bytes)
+    uploadedFile(a)
+  }
+
+  def uploadedFile(a: FileActorProto.UploadedFile): UploadedFile = {
     val fileInfo = if(a.hasFileInfo) {
       getMultimediaFileInfo(a.getFileInfo)
     } else None
