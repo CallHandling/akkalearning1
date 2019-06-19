@@ -28,7 +28,7 @@ object FileActor {
   final case class StreamFailure(ex: Throwable)
 
   // Events
-  final case class SetDetails(filename: String, description: String)
+  final case class SetFilename(filename: String)
   final case class SetDescription(description: String)
   final case class SetUpStream(system: ActorSystem)
   case object GetDetails
@@ -48,7 +48,7 @@ object FileActor {
   final case class Details(filename: String, description: String) extends Data
 }
 
-class FileActor(id: String) extends FSM[State, Data] with Stash with ActorLogging {
+class FileActor extends FSM[State, Data] with Stash with ActorLogging {
   import FileActor._
 
   startWith(Idle, Details("", ""))
@@ -70,8 +70,8 @@ class FileActor(id: String) extends FSM[State, Data] with Stash with ActorLoggin
   whenUnhandled {
     case Event(SetDescription(description), details: Details) =>
       stay.using(details.copy(description = description))
-    case Event(SetDetails(filename, description), _) =>
-      stay.using(Details(filename, description))
+    case Event(SetFilename(filename), details: Details) =>
+      stay.using(details.copy(filename = filename))
     case Event(GetDetails, _) =>
       stashAndStay("retrieval")
   }

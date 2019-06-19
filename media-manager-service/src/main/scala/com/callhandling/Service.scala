@@ -1,15 +1,17 @@
 package com.callhandling
 
+import akka.Done
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.HttpResponse
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
 import akka.http.scaladsl.server.Directives.{entity, path, _}
+import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
-import akka.http.scaladsl.server.{Directive1, RejectionHandler}
+import akka.http.scaladsl.server.{Directive1, RejectionHandler, Route}
 import akka.pattern.ask
-import akka.stream.scaladsl.Keep
+import akka.stream.scaladsl.{Flow, Keep, Sink}
 import akka.stream.{ActorMaterializer, IOResult}
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms._
@@ -18,7 +20,7 @@ import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.MediaStream._
 import com.callhandling.media.converters.{OutputArgs, Progress}
 import com.callhandling.media.io.{MediaReader, MediaWriter}
-import com.callhandling.media.{Rational, MediaStream}
+import com.callhandling.media.{MediaStream, Rational}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -65,9 +67,9 @@ object Service {
 
     implicit val validatedFieldFormat: RJF[FieldErrorInfo] = jsonFormat2(FieldErrorInfo)
 
-    def validateForm[T](form: T)(implicit validator: Validator[T]): Directive1[T] = {
+    def validateForm[T](form: T)(f: T => Route)(implicit validator: Validator[T]): Route = {
       validator(form) match {
-        case Nil => provide(form)
+        case Nil => provide(form)(f)
         case errors: Seq[FieldErrorInfo] => reject(FormValidationRejection(errors))
       }
     }
@@ -126,20 +128,26 @@ class Service[I, O, M](
     withoutSizeLimit {
       path(Remaining) { fileId =>
         put {
-          validateForm(FileIdForm(fileId)).apply { _ =>
+          validateForm(FileIdForm(fileId)) { _ =>
             //TODO: Add checking for valid vform.fileId on fileListActor
             if (false) complete(internalError("No actor found with id: " + fileId))
-            else fileUpload("file") { case (metadata, byteSource) =>
+            else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
               val outlet = MediaWriter.write(output, fileId)
-              byteSource.runWith(outlet)
 
-              val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
-              onSuccess(fileDataF) {
-                case Details(filename, description) =>
-                  val streams = MediaReader.mediaStreams(input, fileId)
-                  val outputFormats = MediaReader.outputFormats(input, fileId)
-                  complete(UploadResult(fileId, filename, description, streams, outputFormats))
-                case _ => complete(internalError("Could not retrieve file data."))
+              // TODO: Perhaps it's not a clean way to handle the result
+              val uploading = byteSource.toMat(outlet)((_, _) => Future.successful(Done)).run
+
+              onSuccess(uploading) { _ =>
+                fileRegion ! SendToEntity(fileId, SetFilename(filename))
+
+                val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
+                onSuccess(fileDataF) {
+                  case Details(_, description) =>
+                    val streams = MediaReader.mediaStreams(input, fileId)
+                    val outputFormats = MediaReader.outputFormats(input, fileId)
+                    complete(UploadResult(fileId, filename, description, streams, outputFormats))
+                  case _ => complete(internalError("Could not retrieve file data."))
+                }
               }
             }
           }
@@ -152,7 +160,7 @@ class Service[I, O, M](
     pathEndOrSingleSlash {
       post {
         entity(as[ConvertFileForm]) { form =>
-          validateForm(form).apply { case ConvertFileForm(fileId, format, _, _, _) =>
+          validateForm(form) { case ConvertFileForm(fileId, format, _, _, _) =>
             // TODO: filename is still hardcoded here
             val outputDetails = OutputArgs("converted", format)
 
@@ -170,8 +178,8 @@ class Service[I, O, M](
     path("status" / Remaining) { fileId =>
       get {
         val form = FileIdForm(fileId)
-        validateForm(form).apply {
-          case FileIdForm(fileId) =>
+        validateForm(form) {
+          case FileIdForm(_) =>
             val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus)
 
             onSuccess(conversionStatusF) {
@@ -187,7 +195,7 @@ class Service[I, O, M](
     path(Remaining) { fileId =>
       get {
         val form = FileIdForm(fileId)
-        validateForm(form).apply {
+        validateForm(form) {
           case FileIdForm(fileId) =>
             val bytesF = fileRegion ? SendToEntity(fileId, Play)
 

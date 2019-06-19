@@ -50,11 +50,6 @@ object WebServerTyped {
         implicit val executionContext = system.executionContext
         implicit val timeout: Timeout = 3.seconds
 
-
-        implicit val uploadFileFormValidator = UploadFileFormValidator
-        implicit val convertFileFormValidator = ConvertFileFormValidator
-        implicit val fileIdFormValidator = FileIdFormValidator
-
         implicit def formValidationRejectionHandler =
           RejectionHandler.newBuilder()
             .handle { case FormValidationRejection(invalidFields) =>
