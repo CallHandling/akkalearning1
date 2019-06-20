@@ -23,7 +23,11 @@ class FileStreamIO(storagePath: String) {
   def write(id: MediaID, format: Option[OutputFormat]): FileByteSink = {
     val basePath = filePath(id).getParent
     val suffix = format.map("_" + _).getOrElse("")
+
+    // TODO: Perhaps we need to improve this one, making the path unique so
+    //  as to avoid multiple workers writing to the same file
     val outputPath = basePath.resolve(s"$id$suffix")
+
     pathToSink(outputPath)
   }
 
@@ -33,8 +37,6 @@ class FileStreamIO(storagePath: String) {
   def filePath: MediaID => Path = Paths.get(storagePath, _)
 
   def filePathString: MediaID => String = filePath andThen pathString
-
-  def wasSuccessful(result: FileByteSource) =
 }
 
 object FileStreamIO {

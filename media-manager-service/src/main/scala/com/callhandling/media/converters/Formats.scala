@@ -3,10 +3,11 @@ package com.callhandling.media.converters
 import java.io.InputStream
 import java.nio.file.Path
 
-import com.callhandling.media.converters.Formats.mimeTypeFromBytes
 import org.apache.tika.Tika
 
 object Formats {
+  type MimeDetector = String => Boolean
+
   final case class Format(code: String, description: String="")
 
   object Videos {
@@ -44,12 +45,6 @@ object Formats {
       OGG +: OPUS +: OGV +: WAV +: WMA +: Vector()
   }
 
-  def isAudio: MimeDetector = _.startsWith("audio")
-
-  def isVideo: MimeDetector = _.startsWith("video")
-
-  def isSupportedMimeType: MimeDetector = mime => Formats.isAudio(mime) || Formats.isVideo(mime)
-
   def outputFormatsOf(mimeType: String): Vector[Format] = {
     if (Formats.isAudio(mimeType)) Formats.Audios.all
     else if (Formats.isVideo(mimeType)) Formats.Videos.all
@@ -64,6 +59,9 @@ object Formats {
   def outputFormatsOf(inputStream: InputStream): Vector[Format] =
     outputFormatsOf(mimeTypeFromStream(inputStream))
 
+  def isAudio: MimeDetector = _.startsWith("audio")
+  def isVideo: MimeDetector = _.startsWith("video")
+  def isSupportedMimeType: MimeDetector = mime => isAudio(mime) || isVideo(mime)
 
   def mimeTypeFromBytes: Array[Byte] => String = new Tika().detect
   def mimeTypeFromStream: InputStream => String = new Tika().detect

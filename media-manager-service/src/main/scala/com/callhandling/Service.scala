@@ -18,7 +18,7 @@ import com.callhandling.Forms._
 import com.callhandling.actors.{FileActor, SendToEntity}
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.MediaStream._
-import com.callhandling.media.converters.{OutputArgs, Progress}
+import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 import com.callhandling.media.{MediaStream, Rational}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
@@ -67,6 +67,7 @@ object Service {
 
     implicit val validatedFieldFormat: RJF[FieldErrorInfo] = jsonFormat2(FieldErrorInfo)
 
+    // TODO: Move this function somewhere
     def validateForm[T](form: T)(f: T => Route)(implicit validator: Validator[T]): Route = {
       validator(form) match {
         case Nil => provide(form)(f)
@@ -117,7 +118,7 @@ class Service[I, O, M](
     pathEndOrSingleSlash {
       post {
         entity(as[UploadFileForm]) { form =>
-          validateForm(form).apply { case UploadFileForm(description) =>
+          validateForm(form) { case UploadFileForm(description) =>
             val fileId = FileActor.generateId
             fileRegion ! SendToEntity(fileId, SetDescription(description))
             complete(FileIdResult(fileId))
@@ -132,12 +133,13 @@ class Service[I, O, M](
             //TODO: Add checking for valid vform.fileId on fileListActor
             if (false) complete(internalError("No actor found with id: " + fileId))
             else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
+              fileRegion ! SendToEntity(fileId, UploadStarted)
+
               val outlet = MediaWriter.write(output, fileId)
+              val uploadF = byteSource.toMat(outlet)(Keep.right).run
 
-              // TODO: Perhaps it's not a clean way to handle the result
-              val uploading = byteSource.toMat(outlet)((_, _) => Future.successful(Done)).run
-
-              onSuccess(uploading) { _ =>
+              onSuccess(uploadF) { _ =>
+                fileRegion ! SendToEntity(fileId, UploadCompleted)
                 fileRegion ! SendToEntity(fileId, SetFilename(filename))
 
                 val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
