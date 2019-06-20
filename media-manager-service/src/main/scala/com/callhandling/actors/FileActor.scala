@@ -6,6 +6,7 @@ import com.callhandling.Forms.UploadFileForm
 import com.callhandling.actors.FileActor.{Data, State}
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.MediaStream
+import com.callhandling.media.converters.Converter.OutputArgs
 import com.callhandling.media.converters._
 
 object FileActor {
@@ -22,10 +23,10 @@ object FileActor {
   case object Ready extends State
   case object Converting extends State
 
-  // Streaming messages
-  case object StreamInitialized
-  case object StreamCompleted
-  final case class StreamFailure(ex: Throwable)
+  // Upload commands
+  case object UploadStarted
+  case object UploadCompleted
+  final case class UploadFailed(ex: Throwable)
 
   // Events
   final case class SetFilename(filename: String)
@@ -54,17 +55,11 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
   startWith(Idle, Details("", ""))
 
   when(Idle) {
-    case Event(StreamInitialized, _) => goto(Uploading)
+    case Event(UploadStarted, _) => goto(Uploading)
   }
 
   when(Uploading) {
-    case Event(StreamCompleted, _) => goto(Ready)
-  }
-
-  when(Ready) {
-    case Event(GetDetails, details: Details) =>
-      sender() ! details
-      stay
+    case Event(UploadCompleted, _) => goto(Ready)
   }
 
   whenUnhandled {
@@ -72,10 +67,12 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
       stay.using(details.copy(description = description))
     case Event(SetFilename(filename), details: Details) =>
       stay.using(details.copy(filename = filename))
-    case Event(GetDetails, _) =>
-      stashAndStay("retrieval")
+    case Event(GetDetails, details: Details) =>
+      sender() ! details
+      stay
   }
 
+  @deprecated
   private def stashAndStay(action: String) = {
     log.info(s"Data not ready for $action yet. Stashing the request for now.")
     stash()

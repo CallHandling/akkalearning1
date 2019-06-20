@@ -6,8 +6,8 @@ import com.callhandling.media.OutputFormat
 import scala.concurrent.Future
 
 package object instances {
-  implicit val fileReader: MediaReader[FileStreamIO, Future[IOResult]] =
-    new MediaReader[FileStreamIO, Future[IOResult]] {
+  implicit val fileReader: MediaReader[FileStreamIO, IOResult] =
+    new MediaReader[FileStreamIO, IOResult] {
       override def read(input: FileStreamIO, id: String) = input.read(id)
 
       override def mediaStreams(input: FileStreamIO, id: String) =
@@ -17,8 +17,8 @@ package object instances {
         input.outputFormats(id)
     }
 
-  implicit val fileWriter: MediaWriter[FileStreamIO, Future[IOResult]] =
-    new MediaWriter[FileStreamIO, Future[IOResult]] {
+  implicit val fileWriter: MediaWriter[FileStreamIO, IOResult] =
+    new MediaWriter[FileStreamIO, IOResult] {
       override def write(output: FileStreamIO, id: String, outputFormat: OutputFormat) =
         output.write(id, Some(outputFormat))
 

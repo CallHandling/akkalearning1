@@ -5,6 +5,7 @@ import java.io.OutputStream
 import akka.actor.{Actor, ActorLogging, PoisonPill, Props}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Keep, StreamConverters}
+import com.callhandling.media.converters.Converter.OutputArgs
 import com.callhandling.media.converters._
 import com.callhandling.media.io.{BytesInlet, MediaWriter}
 import com.callhandling.media.processor.AudioProcessor.{Failed, FormatConversionStatus, FormatProgress, Success}

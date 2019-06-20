@@ -65,8 +65,7 @@ object WebServerTyped {
           pathEndOrSingleSlash {
             post {
               entity(as[UploadFileForm]) { form =>
-                validateForm(form).apply {
-                  vform =>
+                validateForm(form) { vform =>
                     val fileId = ActorSharding.generateEntityId
                     val future: Future[AddFile] = fileListActorEntityRef.ask(ref => AddFormCommand(fileId, vform, ref))
                     onSuccess(future) {
@@ -82,11 +81,10 @@ object WebServerTyped {
               path(Remaining) { fileId =>
                 put {
                   val form = FileIdForm(fileId)
-                  validateForm(form).apply {
-                    vform => {
+                  validateForm(form) { _ => {
                       //TODO: Add checking for valid vform.fileId on fileListActor
                       if (false) {
-                        complete(internalError("No actor found with id: " + vform.fileId))
+                        complete(internalError("No actor found with id: " + fileId))
                       } else {
                         fileUpload("file") {
                           case (fileInfo, fileStream) =>
@@ -109,7 +107,7 @@ object WebServerTyped {
           pathEndOrSingleSlash {
             post {
               entity(as[ConvertFileForm]) { form =>
-                validateForm(form).apply {
+                validateForm(form) {
                   vform =>
                     val uploadFileDescription: Future[HttpResponse] = Http().singleRequest(
                       HttpRequest(uri = s"http://localhost:8080/api/v2/file/upload",
@@ -167,10 +165,7 @@ object WebServerTyped {
             path("status" / Remaining) { fileId =>
               get {
                 val form = FileIdForm(fileId)
-                validateForm(form).apply {
-                  vform =>
-                    complete(internalError("Not implemented"))
-                }
+                validateForm(form)(_ => complete(internalError("Not implemented")))
               }
             }
         }
@@ -179,7 +174,7 @@ object WebServerTyped {
           path(Remaining) { fileId =>
             get {
               val form = FileIdForm(fileId)
-              validateForm(form).apply {
+              validateForm(form) {
                 vform =>
                   val future: Future[GetFile] = fileListActorEntityRef.ask(ref => GetFileCommand(FilePipeline.FileHD, vform.fileId, ref))
                   onSuccess(future) {

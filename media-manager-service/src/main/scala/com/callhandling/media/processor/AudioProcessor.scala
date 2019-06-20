@@ -3,6 +3,7 @@ package com.callhandling.media.processor
 import akka.actor.{ActorLogging, ActorRef, FSM, Props}
 import akka.stream.ActorMaterializer
 import com.callhandling.media.OutputFormat
+import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
 import com.callhandling.media.converters._
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 import com.callhandling.media.processor.AudioProcessor._

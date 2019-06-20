@@ -1,32 +1,11 @@
 package com.callhandling.media
 
-import java.io.{ByteArrayOutputStream, InputStream, OutputStream}
+import java.io.{InputStream, OutputStream}
 
+import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
 import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeInput, PipeOutput, ProgressListener}
-import org.apache.tika.Tika
 
 package object converters {
-  type MimeDetector = String => Boolean
-
-  case class OutputArgs(filename: String, format: String)
-  case class Progress(
-      bitRate: Double,
-      drop: Long,
-      dup: Long,
-      fps: Double,
-      frame: Long,
-      q: Double,
-      size: Long,
-      speed: Double,
-      timeMillis: Long,
-      percent: Float) {
-    override def toString = {
-      val percentTwoDecimal = math.floor(percent * 100) / 100
-      s"$percentTwoDecimal% - ${super.toString}"
-    }
-  }
-  case object EmptyProgress
-
   implicit class InputStreamConverter(inputStream: InputStream) {
     def convert(outputStream: OutputStream, timeDuration: Float, outputArgs: OutputArgs)
       (f: Progress => Unit): Option[ConversionError] = outputArgs match {
@@ -61,18 +40,4 @@ package object converters {
         None
     }
   }
-
-  def getOutputFormats(data: Array[Byte]) = {
-    val mimeType = mimeTypeOf(data)
-
-    if (isAudio(mimeType)) Formats.Audios.all
-    else if (isVideo(mimeType)) Formats.Videos.all
-    else Nil
-  }
-
-  def isAudio: MimeDetector = _.startsWith("audio")
-  def isVideo: MimeDetector = _.startsWith("video")
-  def isSupportedMimeType: MimeDetector = mime => isAudio(mime) || isVideo(mime)
-
-  def mimeTypeOf: Array[Byte] => String = new Tika().detect
 }
