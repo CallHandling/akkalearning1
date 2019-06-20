@@ -4,7 +4,7 @@ import java.io.NotSerializableException
 
 import akka.actor.typed.ActorRefResolver
 import akka.actor.typed.javadsl.Adapter
-import akka.serialization.{BaseSerializer, SerializerWithStringManifest}
+import akka.serialization.{BaseSerializer, SerializerWithStringManifest}/*
 import com.callhandling.typed.persistence.protobuf.FileActorProto
 
 
@@ -263,3 +263,4 @@ class FileActorSerializer(val system: akka.actor.ExtendedActorSystem) extends Se
   }
 
 }
+*/

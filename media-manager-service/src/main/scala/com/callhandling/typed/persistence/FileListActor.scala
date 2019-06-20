@@ -43,6 +43,7 @@ case object FilePipeline {
   }
 }
 
+/*
 sealed trait FileListCommand
 final case object IdleFileListCommand extends FileListCommand
 final case object PassivateFileListCommand extends FileListCommand
@@ -226,3 +227,4 @@ object FileListActor extends ActorSharding[FileListCommand] {
   }
 
 }
+*/

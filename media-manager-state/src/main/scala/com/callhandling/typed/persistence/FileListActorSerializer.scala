@@ -1,7 +1,7 @@
 package com.callhandling.typed.persistence
 
 import java.io.NotSerializableException
-
+/*
 import akka.serialization.{BaseSerializer, SerializerWithStringManifest}
 import com.callhandling.typed.persistence.protobuf.{FileListActorProto}
 
@@ -57,3 +57,4 @@ class FileListActorSerializer(val system: akka.actor.ExtendedActorSystem) extend
     GetEvent(a.getFileId)
   }
 }
+*/

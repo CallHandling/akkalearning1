@@ -31,7 +31,7 @@ import scala.io.StdIn
 
 object WebServerTyped {
 
-
+/*
   def main(args: Array[String]) {
     val system = ActorSystem(mainBehavior, "media-manager-system-typed", ConfigFactory.load("applicationTyped.conf"))
     system.whenTerminated
@@ -89,10 +89,11 @@ object WebServerTyped {
                         fileUpload("file") {
                           case (fileInfo, fileStream) =>
                             val future: Future[GetFile] = fileListActorEntityRef.ask(ref => AddFileCommand(FilePipeline.AmazonS3, fileId, fileStream, fileInfo.fileName, ref))
-                            onSuccess(future) {
-                              case GetFile(_, UploadedFile(fileId, details, streams, outputFormats), _) =>
-                                complete(UploadResult(fileId, details.filename, details.description, streams, outputFormats))
-                              case _ => complete(internalError("Could not retrieve file data."))
+                            onSuccess(future) { _ =>
+                              complete("")
+                              //case GetFile(_, UploadedFile(fileId, details, streams, outputFormats)) =>
+                              //  complete(UploadResult(fileId, filename, description, streams, outputFormats))
+                              //case _ => complete(internalError("Could not retrieve file data."))
                             }
                         }
                       }
@@ -217,5 +218,5 @@ object WebServerTyped {
     }
 
   def internalError(msg: String) = HttpResponse(InternalServerError, entity = msg)
-
+*/
 }
