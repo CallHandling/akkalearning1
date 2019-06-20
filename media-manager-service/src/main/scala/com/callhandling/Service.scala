@@ -1,6 +1,5 @@
 package com.callhandling
 
-import akka.Done
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
@@ -9,21 +8,23 @@ import akka.http.scaladsl.model.StatusCodes.InternalServerError
 import akka.http.scaladsl.server.Directives.{entity, path, _}
 import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
-import akka.http.scaladsl.server.{Directive1, RejectionHandler, Route}
+import akka.http.scaladsl.server.{RejectionHandler, Route}
 import akka.pattern.ask
-import akka.stream.scaladsl.{Flow, Keep, Sink}
-import akka.stream.{ActorMaterializer, IOResult}
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Keep
 import akka.util.{ByteString, Timeout}
 import com.callhandling.Forms._
 import com.callhandling.actors.{FileActor, SendToEntity}
-import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.MediaStream._
 import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
+import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 import com.callhandling.media.{MediaStream, Rational}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
+import com.callhandling.http.JsonSupport._
+import com.callhandling.http.Validators.validateForm
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.ExecutionContextExecutor
 import scala.io.StdIn
 import scala.util.Success
 
@@ -37,44 +38,6 @@ object Service {
       outputFormats: Vector[Format])
 
   final case class ConversionResult(message: String, fileId: String, outputArgs: OutputArgs)
-
-  object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-    type RJF[A] = RootJsonFormat[A]
-
-    implicit val rationalFormat: RJF[Rational] = jsonFormat2(Rational)
-    implicit val codecFormat: RJF[Codec] = jsonFormat5(Codec)
-    implicit val aspectRationFormat: RJF[AspectRatio] = jsonFormat2(AspectRatio)
-    implicit val colorFormat: RJF[Color] = jsonFormat4(Color)
-    implicit val dimensionsFormat: RJF[Dimensions] = jsonFormat2(Dimensions)
-    implicit val bitsFormat: RJF[Bits] = jsonFormat4(Bits)
-    implicit val nbFormat: RJF[Nb] = jsonFormat3(Nb)
-    implicit val samplesFormat: RJF[Samples] = jsonFormat2(Samples)
-    implicit val frameRatesFormat: RJF[FrameRates] = jsonFormat2(FrameRates)
-    implicit val timeFormat: RJF[Time] = jsonFormat6(Time)
-    implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
-    implicit val streamDetailsFormat: RJF[MediaStream] = jsonFormat21(MediaStream.apply)
-    implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
-    implicit val outputArgsFormat: RJF[OutputArgs] = jsonFormat2(OutputArgs)
-
-    implicit val fileIdResultFormat: RJF[FileIdResult] = jsonFormat1(FileIdResult)
-    implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
-    implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat3(ConversionResult)
-
-    implicit val uploadFileFormFormat: RJF[UploadFileForm] = jsonFormat1(UploadFileForm)
-    implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat5(ConvertFileForm)
-    implicit val fileIdFormFormat: RJF[FileIdForm] = jsonFormat1(FileIdForm)
-    implicit val conversionProgressFormat: RJF[Progress] = jsonFormat10(Progress)
-
-    implicit val validatedFieldFormat: RJF[FieldErrorInfo] = jsonFormat2(FieldErrorInfo)
-
-    // TODO: Move this function somewhere
-    def validateForm[T](form: T)(f: T => Route)(implicit validator: Validator[T]): Route = {
-      validator(form) match {
-        case Nil => provide(form)(f)
-        case errors: Seq[FieldErrorInfo] => reject(FormValidationRejection(errors))
-      }
-    }
-  }
 
   final case class MediaFileDetail(description: String)
 
@@ -103,7 +66,6 @@ class Service[I, O, M](
   import FileActor._
   import Forms._
   import Service._
-  import JsonSupport._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
 

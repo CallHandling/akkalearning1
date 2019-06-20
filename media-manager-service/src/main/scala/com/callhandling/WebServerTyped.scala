@@ -17,7 +17,8 @@ import akka.stream.scaladsl.Source
 import akka.stream.typed.scaladsl.ActorMaterializer
 import akka.util.Timeout
 import com.callhandling.Forms._
-import com.callhandling.Service.JsonSupport.{validateForm, _}
+import com.callhandling.http.JsonSupport._
+import com.callhandling.http.Validators._
 import com.callhandling.Service.{FileIdResult, UploadResult}
 import com.callhandling.media.FFmpegConf
 import com.callhandling.typed.cluster.ActorSharding

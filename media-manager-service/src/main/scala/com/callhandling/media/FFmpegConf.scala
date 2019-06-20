@@ -9,5 +9,5 @@ object FFmpegConf {
   lazy val Bin = Paths.get("/usr/bin/")
 
   lazy val StoragePath: String =
-    FileUtil.pathString(FileUtil.getOrCreatePath("akkalearning"))
+    FileUtil.pathString(FileUtil.createPath("akkalearning"))
 }

@@ -7,6 +7,7 @@ import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
 import com.callhandling.media.converters.Formats
 import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.io.{BytesInlet, BytesOutlet}
 import com.callhandling.media.{MediaID, MediaStream, OutputFormat}
 import com.callhandling.util.FileUtil._
 
@@ -40,8 +41,8 @@ class FileStreamIO(storagePath: String) {
 }
 
 object FileStreamIO {
-  type FileByteSource = Source[ByteString, Future[IOResult]]
-  type FileByteSink = Sink[ByteString, Future[IOResult]]
+  type FileByteSource = BytesInlet[IOResult]
+  type FileByteSink = BytesOutlet[IOResult]
 
   def pathToSource: Path => FileByteSource = FileIO.fromPath(_)
 
