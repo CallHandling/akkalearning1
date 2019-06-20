@@ -37,43 +37,8 @@ object ValidationUtils {
   def minValidation(limit: Int) = Validation[Any](minRule(limit), minMessage(limit))
 }
 
-// TODO: Move the implicit validators to their own package objects
 object Forms {
   final case class UploadFileForm(description: String)
-
-  implicit object UploadFileFormValidator extends Validator[UploadFileForm] {
-    override def apply(model: UploadFileForm): Seq[FieldErrorInfo] = {
-
-      val description: Option[FieldErrorInfo] =
-        validation(ValidationUtils.minValidation(5), "fileId", model.description)
-
-      (description :: Nil).flatten
-    }
-  }
-
   final case class ConvertFileForm(fileId: String, format: String, channels: Int, sampleRate: Int, codec: String)
-
-  implicit object ConvertFileFormValidator extends Validator[ConvertFileForm] {
-    override def apply(model: ConvertFileForm): Seq[FieldErrorInfo] = {
-      val fileId: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "fileId", model.fileId)
-      val format: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "format", model.format)
-      val channels: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "channels", model.channels)
-      val sampleRate: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "sampleRate", model.sampleRate)
-      val codec: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "codec", model.codec)
-
-      (fileId :: format :: channels :: sampleRate :: codec :: Nil).flatten
-    }
-  }
-
   final case class FileIdForm(fileId: String)
-
-  implicit object FileIdFormValidator extends Validator[FileIdForm] {
-    override def apply(model: FileIdForm): Seq[FieldErrorInfo] = {
-
-      val fileId: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "fileId", model.fileId)
-
-      (fileId :: Nil).flatten
-    }
-  }
-
 }
