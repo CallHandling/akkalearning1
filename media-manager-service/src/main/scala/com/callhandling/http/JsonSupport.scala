@@ -5,11 +5,11 @@ import akka.http.scaladsl.server.Directives.{provide, reject}
 import akka.http.scaladsl.server.Route
 import com.callhandling.Forms.{ConvertFileForm, FileIdForm, UploadFileForm}
 import com.callhandling.Service.{ConversionResult, FileIdResult, UploadResult}
+import com.callhandling.http.validators.FieldErrorInfo
 import com.callhandling.media.MediaStream.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
 import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.{MediaStream, Rational}
-import com.callhandling.{FieldErrorInfo, FormValidationRejection, Validator}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
