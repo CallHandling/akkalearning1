@@ -1,11 +1,12 @@
 package com.callhandling.media.converters
 
-import java.nio.file.Path
-
-import org.apache.tika.Tika
-
 object Converter {
-  case class OutputArgs(filename: String, format: String)
+  case class OutputArgs(
+      format: String,
+      channels: Int,
+      sampleRate: Int,
+      codec: String)
+
   case class Progress(
       bitRate: Double,
       drop: Long,

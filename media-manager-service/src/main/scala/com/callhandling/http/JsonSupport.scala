@@ -28,7 +28,7 @@ object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val channelFormat: RJF[Channel] = jsonFormat2(Channel)
   implicit val streamDetailsFormat: RJF[MediaStream] = jsonFormat21(MediaStream.apply)
   implicit val fileFormatFormat: RJF[Format] = jsonFormat2(Format)
-  implicit val outputArgsFormat: RJF[OutputArgs] = jsonFormat2(OutputArgs)
+  implicit val outputArgsFormat: RJF[OutputArgs] = jsonFormat4(OutputArgs)
 
   implicit val fileIdResultFormat: RJF[FileIdResult] = jsonFormat1(FileIdResult)
   implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
@@ -40,5 +40,4 @@ object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val conversionProgressFormat: RJF[Progress] = jsonFormat10(Progress)
 
   implicit val validatedFieldFormat: RJF[FieldErrorInfo] = jsonFormat2(FieldErrorInfo)
-
 }

@@ -122,16 +122,15 @@ class Service[I, O, M](
     pathEndOrSingleSlash {
       post {
         entity(as[ConvertFileForm]) { form =>
-          validateForm(form) { case ConvertFileForm(fileId, format, _, _, _) =>
-            // TODO: filename is still hardcoded here
-            val outputDetails = OutputArgs("converted", format)
+          validateForm(form) { case ConvertFileForm(fileId, format, channels, sampleRate, codec) =>
+            val outputArgs = OutputArgs(format, channels, sampleRate, codec)
 
-            val conversionF = fileRegion ? SendToEntity(fileId, RequestForConversion(outputDetails))
+            val conversionF = fileRegion ? SendToEntity(fileId, RequestForConversion(outputArgs))
 
             onSuccess(conversionF) {
               case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
               case ConversionStarted(Right(newFileId)) =>
-                complete(ConversionResult("Conversion Started", newFileId, outputDetails))
+                complete(ConversionResult("Conversion Started", newFileId, outputArgs))
             }
           }
         }

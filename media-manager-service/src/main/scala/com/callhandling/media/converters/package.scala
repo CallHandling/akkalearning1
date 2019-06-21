@@ -9,7 +9,7 @@ package object converters {
   implicit class InputStreamConverter(inputStream: InputStream) {
     def convert(outputStream: OutputStream, timeDuration: Float, outputArgs: OutputArgs)
       (f: Progress => Unit): Option[ConversionError] = outputArgs match {
-      case OutputArgs(_, format) =>
+      case OutputArgs(format, channels, sampleRate, codec) =>
         val progressListener: ProgressListener = { progress =>
           val timeDurationMillis = timeDuration * 1000
           val percent = progress.getTimeMillis / timeDurationMillis * 100
@@ -33,7 +33,10 @@ package object converters {
         FFmpeg.atPath(FFmpegConf.Bin)
           .addInput(PipeInput.pumpFrom(inputStream))
           .addOutput(PipeOutput.pumpTo(outputStream)
-            .setFormat(format))
+            .addArguments("-ar", sampleRate.toString)
+            .addArguments("-ac", channels.toString)
+            .addArguments("-c:a", codec)
+            .addArguments("-f", format))
           .setProgressListener(progressListener)
           .execute()
 
@@ -41,3 +44,4 @@ package object converters {
     }
   }
 }
+

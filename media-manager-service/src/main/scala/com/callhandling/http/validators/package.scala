@@ -4,19 +4,18 @@ import com.callhandling.Forms.{ConvertFileForm, FileIdForm, UploadFileForm}
 import com.callhandling.http.validators.Validator._
 
 package object validators {
-  implicit val uploadFileFormValidator: Validator[UploadFileForm] = (model: UploadFileForm) =>
+  implicit val uploadFileFormValidator: Validator[UploadFileForm] = model =>
     validation(ValidationUtils.minValidation(5), "fileId", model.description).toVector
 
-  implicit val convertFileFormValidator: Validator[ConvertFileForm] = (model: ConvertFileForm) => {
-    val fileId: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "fileId", model.fileId)
-    val format: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "format", model.format)
-    val channels: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "channels", model.channels)
-    val sampleRate: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "sampleRate", model.sampleRate)
-    val codec: Option[FieldErrorInfo] = validation(ValidationUtils.requiredValidation, "codec", model.codec)
-
-    (fileId :: format :: channels :: sampleRate :: codec :: Nil).flatten
+  implicit val convertFileFormValidator: Validator[ConvertFileForm] = {
+    case ConvertFileForm(fileId, format, channels, sampleRate, codec) => Vector(
+      validation(ValidationUtils.requiredValidation, "fileId", fileId),
+      validation(ValidationUtils.requiredValidation, "format", format),
+      validation(ValidationUtils.requiredValidation, "channels", channels),
+      validation(ValidationUtils.requiredValidation, "sampleRate", sampleRate),
+      validation(ValidationUtils.requiredValidation, "codec", codec)).flatten
   }
 
-  implicit val fileIdFormValidator: Validator[FileIdForm] = (model: FileIdForm) =>
+  implicit val fileIdFormValidator: Validator[FileIdForm] = model =>
     validation(ValidationUtils.requiredValidation, "fileId", model.fileId).toVector
 }

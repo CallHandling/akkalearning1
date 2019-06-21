@@ -10,9 +10,11 @@ import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
 
 object AudioProcessor {
-  def props[I, O, M](input: I, output: O, ackActorRef: ActorRef)
+  val RegionName = "AudioProcessor"
+
+  def props[I, O, M](input: I, output: O)
       (implicit reader: MediaReader[I, M], writer: MediaWriter[O, M]): Props =
-    Props(new AudioProcessor(input, output, ackActorRef))
+    Props(new AudioProcessor(input, output))
 
   sealed trait ConversionStatus
   case object Success extends ConversionStatus
@@ -20,20 +22,25 @@ object AudioProcessor {
 
   // FSM States
   sealed trait State
-  case object Ready extends ConversionStatus with State
+  case object Idle extends ConversionStatus with State
   case object Converting extends ConversionStatus with State
 
   // FSM Data
   sealed trait Data
-  final case class AudioData(id: String, outputArgsSet: Vector[OutputArgs]) extends Data
+  final case class AudioData(
+      id: String,
+      ackActorRef: ActorRef,
+      outputArgsSet: Vector[OutputArgs]) extends Data
   final case class Convertible(
       id: String,
+      ackActorRef: ActorRef,
       conversionSet: Vector[Conversion],
       timeDuration: Float) extends Data
 
   final case class Conversion(outputArgs: OutputArgs, status: ConversionStatus)
 
-  final case class SetId(id: String)
+  final case class SetMediaId(id: String)
+  final case class SetAckActorRef(ackActorRef: ActorRef)
   final case class SetOutputArgsSet(outputArgsSet: Vector[OutputArgs])
   final case class StartConversion(redoFailed: Boolean)
 
@@ -45,40 +52,44 @@ object AudioProcessor {
   /**
     * Conversion status for the whole file (all output formats have been considered.)
     */
-  final case class FileConversionStatus(id: String, status: ConversionStatus)
+  final case class ConversionResults(id: String, status: ConversionStatus)
 
   final case class FormatProgress(format: OutputFormat, progress: Progress)
 }
 
-class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
+class AudioProcessor[I, O, M](input: I, output: O)
     (implicit reader: MediaReader[I, M], writer: MediaWriter[O, M])
     extends FSM[State, Data] with ActorLogging {
   implicit val mat: ActorMaterializer = ActorMaterializer()
 
-  startWith(Ready, AudioData("", Vector()))
+  val EmptyData = AudioData("", ActorRef.noSender, Vector())
+
+  startWith(Idle, EmptyData)
 
   def setData: StateFunction = {
-    case Event(SetId(id), data: AudioData) =>
+    case Event(SetMediaId(id), data: AudioData) =>
       stay.using(data.copy(id = id))
+    case Event(SetAckActorRef(ackActorRef), data: AudioData) =>
+      stay.using(data.copy(ackActorRef = ackActorRef))
     case Event(SetOutputArgsSet(outputArgsSet), data: AudioData) =>
       stay.using(data.copy(outputArgsSet = outputArgsSet))
   }
 
   def startConversion: StateFunction = {
-    case Event(StartConversion(_), data @ AudioData(id, outputArgsSet)) =>
+    case Event(StartConversion(_), data @ AudioData(id, ackActorRef, outputArgsSet)) =>
       val newData = prepareConversion(id) match {
         case Left(error) =>
           ackActorRef ! error
           data
         case Right(timeDuration) =>
-          Convertible(id, outputArgsSet.map(Conversion(_, Converting)), timeDuration)
+          Convertible(id, ackActorRef, outputArgsSet.map(Conversion(_, Converting)), timeDuration)
       }
       goto(Converting).using(newData)
-    case Event(StartConversion(redo), data @ Convertible(_, conversionSet, _)) =>
+    case Event(StartConversion(redo), data @ Convertible(_, _, conversionSet, _)) =>
       def startConversion: Conversion => Conversion = _.copy(status = Converting)
 
       val convertedFormats = conversionSet.map {
-        case conversion @ Conversion(_, Ready) => startConversion(conversion)
+        case conversion @ Conversion(_, Idle) => startConversion(conversion)
         case conversion @ Conversion(_, Failed(_)) if redo => startConversion(conversion)
         case conversion => conversion
       }
@@ -86,12 +97,13 @@ class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
       goto(Converting).using(data.copy(conversionSet = convertedFormats))
   }
 
-  when(Ready)(setData orElse startConversion)
+  when(Idle)(setData orElse startConversion)
 
   when(Converting) {
-    case Event(FormatConversionStatus(format, status), data @ Convertible(id, conversionSet, _)) =>
+    case Event(FormatConversionStatus(format, status),
+        data @ Convertible(id, ackActorRef, conversionSet, _)) =>
       val newConversionSet = conversionSet.map {
-        case conversion @ Conversion(OutputArgs(_, `format`), _) =>
+        case conversion @ Conversion(OutputArgs(`format`, _, _, _), _) =>
           conversion.copy(status = status)
         case conversion => conversion
       }
@@ -99,7 +111,7 @@ class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
       val remaining = newConversionSet.filter(_.status == Converting)
 
       val newState = if (remaining.isEmpty) {
-        val conversionStatus = newConversionSet.foldLeft[ConversionStatus](Ready) {
+        val conversionStatus = newConversionSet.foldLeft[ConversionStatus](Idle) {
           case (Failed(ConversionErrorSet(errors)), Conversion(_, Failed(errorCode))) =>
             Failed(ConversionErrorSet(errorCode :: errors))
           case (_, Conversion(_, Failed(errorCode))) =>
@@ -107,29 +119,29 @@ class AudioProcessor[I, O, M](input: I, output: O, ackActorRef: ActorRef)
           case (_, Conversion(_, failed @ Failed(_))) => failed
           case (accStatus, Conversion(_, Success)) => accStatus
         }
-        ackActorRef ! FileConversionStatus(id, conversionStatus)
+        ackActorRef ! ConversionResults(id, conversionStatus)
 
-        goto(Ready)
+        goto(Idle)
       } else stay
 
       newState.using(data.copy(conversionSet = newConversionSet))
-    case Event(formatProgress: FormatProgress, _) =>
-      ackActorRef ! formatProgress
+    case Event(formatProgress: FormatProgress, convertible: Convertible) =>
+      convertible.ackActorRef ! formatProgress
       stay
   }
 
   onTransition {
-    case Ready -> Converting =>
+    case Idle -> Converting =>
       log.info("Converting...")
       nextStateData match {
-        case Convertible(id, conversionSet, timeDuration) => conversionSet.foreach {
+        case Convertible(id, _, conversionSet, timeDuration) => conversionSet.foreach {
           case Conversion(outputArgs, Converting) =>
             lazy val inlet = MediaReader.read(input, id)
             val worker = context.actorOf(Worker.props(id, inlet, output))
             worker ! Convert(outputArgs, timeDuration)
         }
       }
-    case Converting -> Ready => log.info("Conversion completed.")
+    case Converting -> Idle => log.info("Conversion completed.")
   }
 
   def prepareConversion(id: String): Either[ConversionError, Float] = {

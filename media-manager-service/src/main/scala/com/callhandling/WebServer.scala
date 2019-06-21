@@ -24,10 +24,11 @@ object WebServer {
       // TODO: Make this configurable
       s"${System.getProperty("user.home")}/akkalearning")
 
-    val audioProcessorRegion = shardRegion(system, AudioProcessor.props(
-      input = fileStreamIO,
-      output = fileStreamIO,
-      ackActorRef = TestProbe().ref))
+    val audioProcessorRegion = shardRegion(
+      system,
+      AudioProcessor.props(
+        input = fileStreamIO,
+        output = fileStreamIO))
 
     Service(
       fileRegion = fileRegion,

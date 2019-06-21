@@ -1,18 +1,17 @@
 package com.callhandling.actors
 
-import akka.actor.{ActorLogging, ActorRef, ActorSystem, FSM, Props, Stash}
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
-import com.callhandling.Forms.UploadFileForm
+import akka.actor.{ActorLogging, ActorSystem, FSM, Props, Stash}
+import akka.cluster.sharding.ClusterSharding
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.media.converters.Formats.Format
-import com.callhandling.media.MediaStream
-import com.callhandling.media.converters.Converter.OutputArgs
-import com.callhandling.media.converters._
+import com.callhandling.media.OutputFormat
+import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
+import com.callhandling.media.processor.AudioProcessor
+import com.callhandling.media.processor.AudioProcessor.{ConversionStatus, FormatProgress, ConversionResults, SetAckActorRef, SetMediaId, SetOutputArgsSet, StartConversion}
 
 object FileActor {
   val RegionName = "FileManager"
 
-  def props: Props = Props[FileActor]
+  def props(system: ActorSystem): Props = Props(new FileActor(system))
 
   def generateId: String = java.util.UUID.randomUUID().toString
 
@@ -20,7 +19,6 @@ object FileActor {
   sealed trait State
   case object Idle extends State
   case object Uploading extends State
-  case object Ready extends State
   case object Converting extends State
 
   // Upload commands
@@ -29,40 +27,70 @@ object FileActor {
   final case class UploadFailed(ex: Throwable)
 
   // Events
+  final case class SetId(id: String)
   final case class SetFilename(filename: String)
   final case class SetDescription(description: String)
-  final case class SetUpStream(system: ActorSystem)
   case object GetDetails
   case object Play
 
   // Conversion Messages/Events
-  final case class RequestForConversion(outputArgs: OutputArgs)
-  final case class Convert(outputArgs: OutputArgs, timeDuration: Float)
-  case object CompleteConversion
-  case object GetConversionStatus
-
-  // Non-command messages
-  final case class ConversionStarted(either: Either[String, String])
+  final case class RequestForConversion(outputArgsSet: Vector[OutputArgs])
 
   // Data
   sealed trait Data
-  final case class Details(filename: String, description: String) extends Data
+  final case class Details(
+      id: String, filename: String, description: String) extends Data
+  final case class Conversion(
+      details: Details,
+      conversions: Vector[FormatProgress]) extends Data
 }
 
-class FileActor extends FSM[State, Data] with Stash with ActorLogging {
+class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with ActorLogging {
   import FileActor._
 
-  startWith(Idle, Details("", ""))
+  startWith(Idle, Details("", "", ""))
 
   when(Idle) {
-    case Event(UploadStarted, _) => goto(Uploading)
+    case Event(UploadStarted, _) =>
+      log.info("Upload started.")
+      goto(Uploading)
+    case Event(RequestForConversion(outputArgsSet), details @ Details(id, _, _)) =>
+      val converter = ClusterSharding(system).shardRegion(AudioProcessor.RegionName)
+
+      def processMedia(command: Any): Unit = converter ! SendToEntity(id, command)
+
+      processMedia(SetMediaId(id))
+      processMedia(SetOutputArgsSet(outputArgsSet))
+      processMedia(SetAckActorRef(self))
+      processMedia(StartConversion(true))
+
+      goto(Converting).using(Conversion(details, Vector.empty))
   }
 
   when(Uploading) {
-    case Event(UploadCompleted, _) => goto(Ready)
+    case Event(UploadCompleted, _) =>
+      log.info("Upload completed.")
+      goto(Idle)
+  }
+
+  when(Converting) {
+    case Event(FormatProgress(format, progress), conversion @ Conversion(_, conversions)) =>
+      stay.using(conversion.copy(conversions = conversions.collect {
+        case formatProgress @ FormatProgress(`format`, _) =>
+          formatProgress.copy(progress = progress)
+        case formatProgress => formatProgress
+      }))
+    case Event(ConversionResults(mediaId, _), Conversion(details, _)) =>
+      if (mediaId == details.id)
+        goto(Idle).using(details)
+
+      // Ignore results if it's meant for a different file
+      else stay
   }
 
   whenUnhandled {
+    case Event(SetId(id), details: Details) =>
+      stay.using(details.copy(id = id))
     case Event(SetDescription(description), details: Details) =>
       stay.using(details.copy(description = description))
     case Event(SetFilename(filename), details: Details) =>
@@ -70,13 +98,6 @@ class FileActor extends FSM[State, Data] with Stash with ActorLogging {
     case Event(GetDetails, details: Details) =>
       sender() ! details
       stay
-  }
-
-  @deprecated
-  private def stashAndStay(action: String) = {
-    log.info(s"Data not ready for $action yet. Stashing the request for now.")
-    stash()
-    stay
   }
 
   initialize()
