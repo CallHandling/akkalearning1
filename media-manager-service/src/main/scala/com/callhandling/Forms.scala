@@ -9,4 +9,5 @@ object Forms {
       sampleRate: Int,
       codec: String)
   final case class FileIdForm(fileId: String)
+  final case class ConversionStatusForm(fileId: String, format: String)
 }

@@ -3,7 +3,8 @@ package com.callhandling.actors
 import akka.actor.{ActorLogging, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.ClusterSharding
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.media.converters.OutputArgs
+import com.callhandling.media.OutputFormat
+import com.callhandling.media.converters.{NoProgress, OutputArgs}
 import com.callhandling.media.processor.AudioProcessor
 import com.callhandling.media.processor.AudioProcessor._
 
@@ -34,6 +35,7 @@ object FileActor {
 
   // Conversion Messages/Events
   final case class RequestForConversion(outputArgsSet: Vector[OutputArgs])
+  final case class GetConversionStatus(format: String)
 
   // Data
   sealed trait Data
@@ -64,7 +66,7 @@ class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with Ac
   when(Converting) {
     case Event(formatProgress @ FormatProgress(format, _), conversion @ Conversion(_, progresses)) =>
       // Update the progress of a format, or add a new one if it does not exist.
-      val i = progresses.indexWhere(_.format == format)
+      val i = progresses.indexWhere(progressHasFormat(format))
       stay.using(conversion.copy(progresses =
         if (i == -1) progresses :+ formatProgress
         else progresses.updated(i, formatProgress)))
@@ -89,17 +91,26 @@ class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with Ac
         stay
     }
 
-    def handleConversionRequest: StateFunction = {
+    def conversionRequest: StateFunction = {
       case Event(RequestForConversion(outputArgsSet), details @ Details(id, _, _)) =>
         convert(id, outputArgsSet, Conversion(details, Vector.empty))
       case Event(RequestForConversion(outputArgsSet), conversion @ Conversion(details, progresses)) =>
         // Only the formats that have not been already added to the set should be
         // included in the conversion
         val newOutputArgsSet = outputArgsSet.filter { case OutputArgs(format, _, _, _) =>
-          !progresses.exists(_.format == format)
+          !progresses.exists(progressHasFormat(format))
         }
 
         convert(details.id, newOutputArgsSet, conversion)
+    }
+
+    def conversionStatus: StateFunction = {
+      case Event(GetConversionStatus(_), _: Details) =>
+        sender() ! NoProgress
+        stay
+      case Event(GetConversionStatus(format), Conversion(_, progresses)) =>
+        sender() ! progresses.find(progressHasFormat(format)).getOrElse(NoProgress)
+        stay
     }
 
     def convert(id: String, outputArgsSet: Vector[OutputArgs], data: Data): State = {
@@ -115,8 +126,10 @@ class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with Ac
       goto(Converting).using(data)
     }
 
-    setData orElse handleConversionRequest
+    setData orElse conversionRequest orElse conversionStatus
   }
+
+  def progressHasFormat(format: String): FormatProgress => Boolean = _.format == format
 
   initialize()
 }

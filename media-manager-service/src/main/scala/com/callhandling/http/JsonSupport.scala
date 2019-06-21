@@ -1,14 +1,12 @@
 package com.callhandling.http
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.server.Directives.{provide, reject}
-import akka.http.scaladsl.server.Route
 import com.callhandling.Forms.{ConvertFileForm, FileIdForm, UploadFileForm}
-import com.callhandling.Service.{ConversionResult, FileIdResult, UploadResult}
+import com.callhandling.Service.{FileIdResult, UploadResult}
 import com.callhandling.http.validators.FieldErrorInfo
 import com.callhandling.media.MediaStream.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
-import com.callhandling.media.converters.Progress.{OutputArgs, OnGoing}
 import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.converters.{OnGoing, OutputArgs}
 import com.callhandling.media.{MediaStream, Rational}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
@@ -32,7 +30,6 @@ object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 
   implicit val fileIdResultFormat: RJF[FileIdResult] = jsonFormat1(FileIdResult)
   implicit val uploadResultFormat: RJF[UploadResult] = jsonFormat5(UploadResult)
-  implicit val conversionResultFormat: RJF[ConversionResult] = jsonFormat3(ConversionResult)
 
   implicit val uploadFileFormFormat: RJF[UploadFileForm] = jsonFormat1(UploadFileForm)
   implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat5(ConvertFileForm)

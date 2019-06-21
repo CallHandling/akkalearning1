@@ -20,3 +20,4 @@ final case class OnGoing(
 }
 
 case object Completed extends Progress
+case object NoProgress extends Progress

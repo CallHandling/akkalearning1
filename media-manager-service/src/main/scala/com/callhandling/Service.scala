@@ -19,7 +19,7 @@ import com.callhandling.http.validators.Validator._
 import com.callhandling.http.validators._
 import com.callhandling.media.MediaStream
 import com.callhandling.media.converters.Formats.Format
-import com.callhandling.media.converters.OutputArgs
+import com.callhandling.media.converters.{Completed, NoProgress, OnGoing, OutputArgs}
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 
 import scala.concurrent.ExecutionContextExecutor
@@ -34,8 +34,6 @@ object Service {
       description: String,
       streams: Vector[MediaStream],
       outputFormats: Vector[Format])
-
-  final case class ConversionResult(message: String, fileId: String, outputArgs: OutputArgs)
 
   final case class MediaFileDetail(description: String)
 
@@ -127,22 +125,22 @@ class Service[I, O, M](
             val outputArgs = OutputArgs(format, channels, sampleRate, codec)
             fileRegion ! SendToEntity(
               fileId, RequestForConversion(Vector(outputArgs)))
-            complete(ConversionResult("Conversion Started", fileId, outputArgs))
+            complete("Conversion Started")
           }
         }
       }
     } ~
-    path("status" / Remaining) { fileId =>
+    path("status" / Remaining / Remaining) { (fileId, format) =>
       get {
-        val form = FileIdForm(fileId)
-        validateForm(form) {
-          case FileIdForm(_) =>
-            val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus)
+        validateForm(ConversionStatusForm(fileId, format)) { _ =>
+          val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus(format))
 
-            onSuccess(conversionStatusF) {
-              case progress: OnGoing => complete(progress)
-              case _ => complete(internalError("Could not retrieve conversion status."))
-            }
+          onSuccess(conversionStatusF) {
+            case NoProgress => complete("No progress available")
+            case progress: OnGoing => complete(progress)
+            case Completed => complete("Conversion completed")
+            case _ => complete(internalError("Could not retrieve conversion status."))
+          }
         }
       }
     }
