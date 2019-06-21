@@ -7,19 +7,20 @@ import akka.util.Timeout
 import com.callhandling.actors._
 import com.callhandling.media.io.instances.FileStreamIO
 import com.callhandling.media.processor.AudioProcessor
+import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 
 object WebServer {
   def main(args: Array[String]) {
-    implicit val mediaManagerSystem: ActorSystem = ActorSystem("media-manager-system")
+    implicit val system: ActorSystem = ActorSystem("media-manager-system")
     implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit val timeout: Timeout = 2.seconds
 
-    val audioProcessorSystem: ActorSystem = ActorSystem("audio-processor-system")
-
     val fileRegion = shardRegion(
-      mediaManagerSystem, FileActor.props(audioProcessorSystem))
+      system = system,
+      name = FileActor.RegionName,
+      props = FileActor.props(system))
 
     // TODO: Make this instance configurable
     //  (e.g. different instance per development stage)
@@ -28,8 +29,9 @@ object WebServer {
       s"${System.getProperty("user.home")}/akkalearning")
 
     val audioProcessorRegion = shardRegion(
-      mediaManagerSystem,
-      AudioProcessor.props(
+      system = system,
+      name = AudioProcessor.RegionName,
+      props = AudioProcessor.props(
         input = fileStreamIO,
         output = fileStreamIO))
 

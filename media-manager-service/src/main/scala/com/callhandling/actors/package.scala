@@ -2,7 +2,6 @@ package com.callhandling
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
-import com.callhandling.actors.FileActor.RegionName
 import com.callhandling.media.processor
 
 package object actors {
@@ -17,8 +16,8 @@ package object actors {
     */
   final case class SendToEntity(id: String, message: Any)
 
-  def shardRegion(system: ActorSystem, props: Props): ActorRef = ClusterSharding(system).start(
-    typeName = RegionName,
+  def shardRegion(system: ActorSystem, name: String, props: Props): ActorRef = ClusterSharding(system).start(
+    typeName = name,
     entityProps = props,
     settings = ClusterShardingSettings(system),
     extractEntityId = extractEntityId,

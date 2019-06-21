@@ -11,7 +11,7 @@ import com.callhandling.media.processor.AudioProcessor._
 object FileActor {
   val RegionName = "FileManager"
 
-  def props(converterSystem: ActorSystem): Props = Props(new FileActor(converterSystem))
+  def props(system: ActorSystem): Props = Props(new FileActor(system))
 
   def generateId: String = java.util.UUID.randomUUID().toString
 
@@ -46,7 +46,7 @@ object FileActor {
       progresses: Vector[FormatProgress]) extends Data
 }
 
-class FileActor(converterSystem: ActorSystem) extends FSM[State, Data] with Stash with ActorLogging {
+class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with ActorLogging {
   import FileActor._
 
   startWith(Idle, Details("", "", ""))
@@ -114,7 +114,7 @@ class FileActor(converterSystem: ActorSystem) extends FSM[State, Data] with Stas
     }
 
     def convert(id: String, outputArgsSet: Vector[OutputArgs], data: Data): State = {
-      val converter = ClusterSharding(converterSystem).shardRegion(AudioProcessor.RegionName)
+      val converter = ClusterSharding(system).shardRegion(AudioProcessor.RegionName)
 
       def processMedia(command: Any): Unit = converter ! SendToEntity(id, command)
 
