@@ -12,11 +12,14 @@ import scala.concurrent.duration._
 
 object WebServer {
   def main(args: Array[String]) {
-    implicit val system: ActorSystem = ActorSystem("media-manager-system")
+    implicit val mediaManagerSystem: ActorSystem = ActorSystem("media-manager-system")
     implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit val timeout: Timeout = 2.seconds
 
-    val fileRegion = shardRegion(system, FileActor.props(system))
+    val audioProcessorSystem: ActorSystem = ActorSystem("audio-processor-system")
+
+    val fileRegion = shardRegion(
+      mediaManagerSystem, FileActor.props(audioProcessorSystem))
 
     // TODO: Make this instance configurable
     //  (e.g. different instance per development stage)
@@ -25,7 +28,7 @@ object WebServer {
       s"${System.getProperty("user.home")}/akkalearning")
 
     val audioProcessorRegion = shardRegion(
-      system,
+      mediaManagerSystem,
       AudioProcessor.props(
         input = fileStreamIO,
         output = fileStreamIO))
