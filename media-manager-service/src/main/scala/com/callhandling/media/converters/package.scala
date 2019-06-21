@@ -2,19 +2,25 @@ package com.callhandling.media
 
 import java.io.{InputStream, OutputStream}
 
-import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
+import com.callhandling.media.converters.Progress.OnGoing
 import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeInput, PipeOutput, ProgressListener}
 
 package object converters {
+  case class OutputArgs(
+      format: String,
+      channels: Int,
+      sampleRate: Int,
+      codec: String)
+
   implicit class InputStreamConverter(inputStream: InputStream) {
     def convert(outputStream: OutputStream, timeDuration: Float, outputArgs: OutputArgs)
-      (f: Progress => Unit): Option[ConversionError] = outputArgs match {
+      (f: OnGoing => Unit): Option[ConversionError] = outputArgs match {
       case OutputArgs(format, channels, sampleRate, codec) =>
         val progressListener: ProgressListener = { progress =>
           val timeDurationMillis = timeDuration * 1000
           val percent = progress.getTimeMillis / timeDurationMillis * 100
 
-          val progressDetails = Progress(
+          val progressDetails = OnGoing(
             bitRate = progress.getBitrate,
             drop = progress.getDrop,
             dup = progress.getDup,

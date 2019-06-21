@@ -3,7 +3,6 @@ package com.callhandling.media.processor
 import akka.actor.{ActorLogging, ActorRef, FSM, Props}
 import akka.stream.ActorMaterializer
 import com.callhandling.media.OutputFormat
-import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
 import com.callhandling.media.converters._
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 import com.callhandling.media.processor.AudioProcessor._
@@ -66,38 +65,40 @@ class AudioProcessor[I, O, M](input: I, output: O)
 
   startWith(Idle, EmptyData)
 
-  def setData: StateFunction = {
-    case Event(SetMediaId(id), data: AudioData) =>
-      stay.using(data.copy(id = id))
-    case Event(SetAckActorRef(ackActorRef), data: AudioData) =>
-      stay.using(data.copy(ackActorRef = ackActorRef))
-    case Event(SetOutputArgsSet(outputArgsSet), data: AudioData) =>
-      stay.using(data.copy(outputArgsSet = outputArgsSet))
+  when(Idle) {
+    def setData: StateFunction = {
+      case Event(SetMediaId(id), data: AudioData) =>
+        stay.using(data.copy(id = id))
+      case Event(SetAckActorRef(ackActorRef), data: AudioData) =>
+        stay.using(data.copy(ackActorRef = ackActorRef))
+      case Event(SetOutputArgsSet(outputArgsSet), data: AudioData) =>
+        stay.using(data.copy(outputArgsSet = outputArgsSet))
+    }
+
+    def startConversion: StateFunction = {
+      case Event(StartConversion(_), data @ AudioData(id, ackActorRef, outputArgsSet)) =>
+        val newData = prepareConversion(id) match {
+          case Left(error) =>
+            ackActorRef ! error
+            data
+          case Right(timeDuration) =>
+            Convertible(id, ackActorRef, outputArgsSet.map(Conversion(_, Converting)), timeDuration)
+        }
+        goto(Converting).using(newData)
+      case Event(StartConversion(redo), data @ Convertible(_, _, conversionSet, _)) =>
+        def startConversion: Conversion => Conversion = _.copy(status = Converting)
+
+        val convertedFormats = conversionSet.map {
+          case conversion @ Conversion(_, Idle) => startConversion(conversion)
+          case conversion @ Conversion(_, Failed(_)) if redo => startConversion(conversion)
+          case conversion => conversion
+        }
+
+        goto(Converting).using(data.copy(conversionSet = convertedFormats))
+    }
+
+    setData orElse startConversion
   }
-
-  def startConversion: StateFunction = {
-    case Event(StartConversion(_), data @ AudioData(id, ackActorRef, outputArgsSet)) =>
-      val newData = prepareConversion(id) match {
-        case Left(error) =>
-          ackActorRef ! error
-          data
-        case Right(timeDuration) =>
-          Convertible(id, ackActorRef, outputArgsSet.map(Conversion(_, Converting)), timeDuration)
-      }
-      goto(Converting).using(newData)
-    case Event(StartConversion(redo), data @ Convertible(_, _, conversionSet, _)) =>
-      def startConversion: Conversion => Conversion = _.copy(status = Converting)
-
-      val convertedFormats = conversionSet.map {
-        case conversion @ Conversion(_, Idle) => startConversion(conversion)
-        case conversion @ Conversion(_, Failed(_)) if redo => startConversion(conversion)
-        case conversion => conversion
-      }
-
-      goto(Converting).using(data.copy(conversionSet = convertedFormats))
-  }
-
-  when(Idle)(setData orElse startConversion)
 
   when(Converting) {
     case Event(FormatConversionStatus(format, status),

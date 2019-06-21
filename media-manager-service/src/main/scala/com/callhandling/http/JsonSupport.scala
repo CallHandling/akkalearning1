@@ -7,7 +7,7 @@ import com.callhandling.Forms.{ConvertFileForm, FileIdForm, UploadFileForm}
 import com.callhandling.Service.{ConversionResult, FileIdResult, UploadResult}
 import com.callhandling.http.validators.FieldErrorInfo
 import com.callhandling.media.MediaStream.{AspectRatio, Bits, Channel, Codec, Color, Dimensions, FrameRates, Nb, Samples, Time}
-import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
+import com.callhandling.media.converters.Progress.{OutputArgs, OnGoing}
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.{MediaStream, Rational}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
@@ -37,7 +37,7 @@ object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val uploadFileFormFormat: RJF[UploadFileForm] = jsonFormat1(UploadFileForm)
   implicit val convertFileFormFormat: RJF[ConvertFileForm] = jsonFormat5(ConvertFileForm)
   implicit val fileIdFormFormat: RJF[FileIdForm] = jsonFormat1(FileIdForm)
-  implicit val conversionProgressFormat: RJF[Progress] = jsonFormat10(Progress)
+  implicit val conversionProgressFormat: RJF[OnGoing] = jsonFormat10(OnGoing)
 
   implicit val validatedFieldFormat: RJF[FieldErrorInfo] = jsonFormat2(FieldErrorInfo)
 }

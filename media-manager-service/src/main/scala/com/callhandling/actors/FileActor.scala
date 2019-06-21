@@ -3,10 +3,9 @@ package com.callhandling.actors
 import akka.actor.{ActorLogging, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.ClusterSharding
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.media.OutputFormat
-import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
+import com.callhandling.media.converters.OutputArgs
 import com.callhandling.media.processor.AudioProcessor
-import com.callhandling.media.processor.AudioProcessor.{ConversionStatus, FormatProgress, ConversionResults, SetAckActorRef, SetMediaId, SetOutputArgsSet, StartConversion}
+import com.callhandling.media.processor.AudioProcessor._
 
 object FileActor {
   val RegionName = "FileManager"
@@ -42,7 +41,7 @@ object FileActor {
       id: String, filename: String, description: String) extends Data
   final case class Conversion(
       details: Details,
-      conversions: Vector[FormatProgress]) extends Data
+      progresses: Vector[FormatProgress]) extends Data
 }
 
 class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with ActorLogging {
@@ -54,17 +53,6 @@ class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with Ac
     case Event(UploadStarted, _) =>
       log.info("Upload started.")
       goto(Uploading)
-    case Event(RequestForConversion(outputArgsSet), details @ Details(id, _, _)) =>
-      val converter = ClusterSharding(system).shardRegion(AudioProcessor.RegionName)
-
-      def processMedia(command: Any): Unit = converter ! SendToEntity(id, command)
-
-      processMedia(SetMediaId(id))
-      processMedia(SetOutputArgsSet(outputArgsSet))
-      processMedia(SetAckActorRef(self))
-      processMedia(StartConversion(true))
-
-      goto(Converting).using(Conversion(details, Vector.empty))
   }
 
   when(Uploading) {
@@ -74,12 +62,12 @@ class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with Ac
   }
 
   when(Converting) {
-    case Event(FormatProgress(format, progress), conversion @ Conversion(_, conversions)) =>
-      stay.using(conversion.copy(conversions = conversions.collect {
-        case formatProgress @ FormatProgress(`format`, _) =>
-          formatProgress.copy(progress = progress)
-        case formatProgress => formatProgress
-      }))
+    case Event(formatProgress @ FormatProgress(format, _), conversion @ Conversion(_, progresses)) =>
+      // Update the progress of a format, or add a new one if it does not exist.
+      val i = progresses.indexWhere(_.format == format)
+      stay.using(conversion.copy(progresses =
+        if (i == -1) progresses :+ formatProgress
+        else progresses.updated(i, formatProgress)))
     case Event(ConversionResults(mediaId, _), Conversion(details, _)) =>
       if (mediaId == details.id)
         goto(Idle).using(details)
@@ -89,15 +77,45 @@ class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with Ac
   }
 
   whenUnhandled {
-    case Event(SetId(id), details: Details) =>
-      stay.using(details.copy(id = id))
-    case Event(SetDescription(description), details: Details) =>
-      stay.using(details.copy(description = description))
-    case Event(SetFilename(filename), details: Details) =>
-      stay.using(details.copy(filename = filename))
-    case Event(GetDetails, details: Details) =>
-      sender() ! details
-      stay
+    def setData: StateFunction = {
+      case Event(SetId(id), details: Details) =>
+        stay.using(details.copy(id = id))
+      case Event(SetDescription(description), details: Details) =>
+        stay.using(details.copy(description = description))
+      case Event(SetFilename(filename), details: Details) =>
+        stay.using(details.copy(filename = filename))
+      case Event(GetDetails, details: Details) =>
+        sender() ! details
+        stay
+    }
+
+    def handleConversionRequest: StateFunction = {
+      case Event(RequestForConversion(outputArgsSet), details @ Details(id, _, _)) =>
+        convert(id, outputArgsSet, Conversion(details, Vector.empty))
+      case Event(RequestForConversion(outputArgsSet), conversion @ Conversion(details, progresses)) =>
+        // Only the formats that have not been already added to the set should be
+        // included in the conversion
+        val newOutputArgsSet = outputArgsSet.filter { case OutputArgs(format, _, _, _) =>
+          !progresses.exists(_.format == format)
+        }
+
+        convert(details.id, newOutputArgsSet, conversion)
+    }
+
+    def convert(id: String, outputArgsSet: Vector[OutputArgs], data: Data): State = {
+      val converter = ClusterSharding(system).shardRegion(AudioProcessor.RegionName)
+
+      def processMedia(command: Any): Unit = converter ! SendToEntity(id, command)
+
+      processMedia(SetMediaId(id))
+      processMedia(SetOutputArgsSet(outputArgsSet))
+      processMedia(SetAckActorRef(self))
+      processMedia(StartConversion(true))
+
+      goto(Converting).using(data)
+    }
+
+    setData orElse handleConversionRequest
   }
 
   initialize()

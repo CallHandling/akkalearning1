@@ -26,11 +26,11 @@ import scala.util.{Success, Try}
 import akka.stream.alpakka.s3.BucketAccess.{AccessDenied, AccessGranted, NotExists}
 import akka.stream.alpakka.s3.MultipartUploadResult
 import akka.stream.alpakka.s3.scaladsl.S3
-import com.callhandling.media.converters.Converter
+import com.callhandling.media.converters.Progress
 import scala.util.Success
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.stream.IOResult
-import com.callhandling.media.converters.{Converter, Formats}
+import com.callhandling.media.converters.{Progress, Formats}
 import com.callhandling.typed.persistence.FileConvertResponse.ConvertStatus
 
 sealed trait FilePipeline

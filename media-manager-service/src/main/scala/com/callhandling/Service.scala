@@ -18,7 +18,7 @@ import com.callhandling.http.validators.FormValidationRejection
 import com.callhandling.http.validators.Validator._
 import com.callhandling.http.validators._
 import com.callhandling.media.MediaStream
-import com.callhandling.media.converters.Converter.{OutputArgs, Progress}
+import com.callhandling.media.converters.Progress.{OutputArgs, OnGoing}
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 
@@ -144,7 +144,7 @@ class Service[I, O, M](
             val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus)
 
             onSuccess(conversionStatusF) {
-              case progress: Progress => complete(progress)
+              case progress: OnGoing => complete(progress)
               case _ => complete(internalError("Could not retrieve conversion status."))
             }
         }
