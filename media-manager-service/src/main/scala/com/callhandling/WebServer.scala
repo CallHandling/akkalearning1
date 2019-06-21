@@ -16,12 +16,12 @@ object WebServer {
     implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit val timeout: Timeout = 2.seconds
 
-    val fileRegion = shardRegion(system, FileActor.props)
+    val fileRegion = shardRegion(system, FileActor.props(system))
 
     // TODO: Make this instance configurable
     //  (e.g. different instance per development stage)
     val fileStreamIO = new FileStreamIO(
-      // TODO: Make this configurable
+      // TODO: Make this path configurable
       s"${System.getProperty("user.home")}/akkalearning")
 
     val audioProcessorRegion = shardRegion(

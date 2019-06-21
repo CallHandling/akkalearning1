@@ -2,8 +2,7 @@ package com.callhandling.media
 
 import java.io.{InputStream, OutputStream}
 
-import com.callhandling.media.converters.Progress.OnGoing
-import com.github.kokorin.jaffree.ffmpeg.{FFmpeg, PipeInput, PipeOutput, ProgressListener}
+import com.github.kokorin.jaffree.ffmpeg._
 
 package object converters {
   case class OutputArgs(

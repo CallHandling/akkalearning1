@@ -18,8 +18,8 @@ import com.callhandling.http.validators.FormValidationRejection
 import com.callhandling.http.validators.Validator._
 import com.callhandling.http.validators._
 import com.callhandling.media.MediaStream
-import com.callhandling.media.converters.Progress.{OutputArgs, OnGoing}
 import com.callhandling.media.converters.Formats.Format
+import com.callhandling.media.converters.OutputArgs
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 
 import scala.concurrent.ExecutionContextExecutor
@@ -80,6 +80,7 @@ class Service[I, O, M](
         entity(as[UploadFileForm]) { form =>
           validateForm(form) { case UploadFileForm(description) =>
             val fileId = FileActor.generateId
+            fileRegion ! SendToEntity(fileId, SetId(fileId))
             fileRegion ! SendToEntity(fileId, SetDescription(description))
             complete(FileIdResult(fileId))
           }
@@ -104,7 +105,7 @@ class Service[I, O, M](
 
                 val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
                 onSuccess(fileDataF) {
-                  case Details(_, description) =>
+                  case Details(_, _, description) =>
                     val streams = MediaReader.mediaStreams(input, fileId)
                     val outputFormats = MediaReader.outputFormats(input, fileId)
                     complete(UploadResult(fileId, filename, description, streams, outputFormats))
@@ -124,14 +125,9 @@ class Service[I, O, M](
         entity(as[ConvertFileForm]) { form =>
           validateForm(form) { case ConvertFileForm(fileId, format, channels, sampleRate, codec) =>
             val outputArgs = OutputArgs(format, channels, sampleRate, codec)
-
-            val conversionF = fileRegion ? SendToEntity(fileId, RequestForConversion(outputArgs))
-
-            onSuccess(conversionF) {
-              case ConversionStarted(Left(errorMessage)) => complete(internalError(errorMessage))
-              case ConversionStarted(Right(newFileId)) =>
-                complete(ConversionResult("Conversion Started", newFileId, outputArgs))
-            }
+            fileRegion ! SendToEntity(
+              fileId, RequestForConversion(Vector(outputArgs)))
+            complete(ConversionResult("Conversion Started", fileId, outputArgs))
           }
         }
       }
