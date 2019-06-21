@@ -1,8 +1,8 @@
-package com.callhandling.http
+package com.callhandling.web
 
-import com.callhandling.Forms.{ConversionStatusForm, ConvertFileForm, FileIdForm, UploadFileForm}
-import com.callhandling.http.validators.Validator._
-import com.callhandling.http.validators.ValidationUtils._
+import Forms.{ConversionStatusForm, ConvertFileForm, FileIdForm, UploadFileForm}
+import com.callhandling.web.validators.Validator._
+import com.callhandling.web.validators.ValidationUtils._
 
 package object validators {
   implicit val uploadFileFormValidator: Validator[UploadFileForm] = model =>

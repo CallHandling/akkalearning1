@@ -13,10 +13,10 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Keep
 import akka.util.{ByteString, Timeout}
 import com.callhandling.actors.{FileActor, SendToEntity}
-import com.callhandling.http.JsonSupport._
-import com.callhandling.http.validators.FormValidationRejection
-import com.callhandling.http.validators.Validator._
-import com.callhandling.http.validators._
+import com.callhandling.web.JsonSupport._
+import com.callhandling.web.validators.FormValidationRejection
+import com.callhandling.web.validators.Validator._
+import com.callhandling.web.validators._
 import com.callhandling.media.MediaStream
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.converters.{Completed, NoProgress, OnGoing, OutputArgs}
@@ -60,7 +60,7 @@ class Service[I, O, M](
         reader: MediaReader[I, M],
         writer: MediaWriter[O, M]) {
   import FileActor._
-  import Forms._
+  import com.callhandling.web.Forms._
   import Service._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
@@ -136,8 +136,8 @@ class Service[I, O, M](
           val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus(format))
 
           onSuccess(conversionStatusF) {
-            case NoProgress => complete("No progress available")
             case progress: OnGoing => complete(progress)
+            case NoProgress => complete("No progress available")
             case Completed => complete("Conversion completed")
             case _ => complete(internalError("Could not retrieve conversion status."))
           }

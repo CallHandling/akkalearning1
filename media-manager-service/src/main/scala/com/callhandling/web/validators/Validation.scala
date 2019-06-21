@@ -1,4 +1,4 @@
-package com.callhandling.http.validators
+package com.callhandling.web.validators
 
 import akka.http.scaladsl.server.Rejection
 

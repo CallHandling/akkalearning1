@@ -1,6 +1,6 @@
 package com.callhandling
 
-import com.callhandling.Forms.{ConvertFileForm, UploadFileForm}
+import com.callhandling.web.Forms.{ConvertFileForm, UploadFileForm}
 import com.callhandling.typed.util.JsonUtil
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._

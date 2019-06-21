@@ -1,4 +1,4 @@
-package com.callhandling
+package com.callhandling.web
 
 object Forms {
   final case class UploadFileForm(description: String)
