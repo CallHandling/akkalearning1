@@ -1,6 +1,7 @@
 package com.callhandling.web.validators
 
 import akka.http.scaladsl.server.Rejection
+import com.callhandling.web.validators.Validator.validation
 
 final case class FieldErrorInfo(name: String, error: String)
 final case class FormValidationRejection(invalidFields: Seq[FieldErrorInfo]) extends Rejection
@@ -31,4 +32,7 @@ object ValidationUtils {
   }
   private def minMessage(limit: Int): ErrorMessage = _ + s" minimum chars of $limit"
   def minValidation(limit: Int) = Validation[Any](minRule(limit), minMessage(limit))
+
+  def withRequiredId(id: String, validations: Option[FieldErrorInfo]*): Vector[FieldErrorInfo] =
+    (validation(requiredValidation, "fileId", id) +: validations.toVector).flatten
 }

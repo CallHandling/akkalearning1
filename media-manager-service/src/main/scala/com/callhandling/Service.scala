@@ -1,6 +1,8 @@
 package com.callhandling
 
+import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
+import akka.http.javadsl.common.{EntityStreamingSupport, JsonEntityStreamingSupport}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpResponse
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
@@ -9,8 +11,8 @@ import akka.http.scaladsl.server.RejectionHandler
 import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.pattern.ask
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Keep
+import akka.stream.{ActorMaterializer, IOResult}
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source, StreamConverters}
 import akka.util.{ByteString, Timeout}
 import com.callhandling.actors.{FileActor, SendToEntity}
 import com.callhandling.web.JsonSupport._
@@ -22,7 +24,7 @@ import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.converters.{Completed, NoProgress, OnGoing, OutputArgs}
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 import scala.util.Success
 
@@ -64,6 +66,7 @@ class Service[I, O, M](
   import Service._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
+  implicit val jsonStreamingSupport: JsonEntityStreamingSupport = EntityStreamingSupport.json()
 
   implicit def formValidationRejectionHandler =
     RejectionHandler.newBuilder()
@@ -152,15 +155,11 @@ class Service[I, O, M](
   def playV1 = pathPrefix("play") {
     path(Remaining) { fileId =>
       get {
-        val form = FileIdForm(fileId)
-        validateForm(form) {
-          case FileIdForm(fileId) =>
-            val bytesF = fileRegion ? SendToEntity(fileId, Play)
-
-            onComplete(bytesF) {
-              case Success(bytes: ByteString) => complete(bytes)
-              case _ => complete(internalError("Could not play the file"))
-            }
+        entity(as[FormatForm]) { case FormatForm(format) =>
+          validateForm(ConversionStatusForm(fileId, format)) { _ =>
+            val inlet = reader.read(input, fileId, format)
+            complete(inlet)
+          }
         }
       }
     }

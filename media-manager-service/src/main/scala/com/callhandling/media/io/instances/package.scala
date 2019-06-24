@@ -10,6 +10,9 @@ package object instances {
     new MediaReader[FileStreamIO, IOResult] {
       override def read(input: FileStreamIO, id: String) = input.read(id)
 
+      override def read(input: FileStreamIO, id: String, format: String) =
+        input.read(id, format)
+
       override def mediaStreams(input: FileStreamIO, id: String) =
         input.mediaStreams(id)
 

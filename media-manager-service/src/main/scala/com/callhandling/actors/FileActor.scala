@@ -30,7 +30,6 @@ object FileActor {
   final case class SetFilename(filename: String)
   final case class SetDescription(description: String)
   case object GetDetails
-  case object Play
 
   // Conversion Messages/Events
   final case class RequestForConversion(outputArgsSet: Vector[OutputArgs])
