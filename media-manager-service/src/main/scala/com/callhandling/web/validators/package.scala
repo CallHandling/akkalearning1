@@ -1,6 +1,6 @@
 package com.callhandling.web
 
-import Forms.{ConversionStatusForm, ConvertFileForm, FileIdForm, UploadFileForm}
+import Forms.{ConversionStatusForm, ConvertFileForm, FileIdForm, FormatForm, UploadFileForm}
 import com.callhandling.web.validators.Validator._
 import com.callhandling.web.validators.ValidationUtils._
 
@@ -20,6 +20,7 @@ package object validators {
   implicit val fileIdFormValidator: Validator[FileIdForm] = model =>
     validation(ValidationUtils.requiredValidation, "fileId", model.fileId).toVector
 
+  // TODO: check against the supported output formats for the file
   implicit val conversionStatusFormValidator: Validator[ConversionStatusForm] = {
     case ConversionStatusForm(fileId, format) => Vector(
       validation(requiredValidation, "fileId", fileId),

@@ -90,7 +90,7 @@ class Service[I, O, M](
         put {
           validateForm(FileIdForm(fileId)) { _ =>
             //TODO: Add checking for valid vform.fileId on fileListActor
-            if (false) complete(internalError("No actor found with id: " + fileId))
+            if (false) complete(internalError("Media not found: " + fileId))
             else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
               fileRegion ! SendToEntity(fileId, UploadStarted)
 
@@ -130,16 +130,19 @@ class Service[I, O, M](
         }
       }
     } ~
-    path("status" / Remaining / Remaining) { (fileId, format) =>
+    path("status" / Remaining) { fileId =>
       get {
-        validateForm(ConversionStatusForm(fileId, format)) { _ =>
-          val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus(format))
+        entity(as[FormatForm]) { case FormatForm(format) =>
+          validateForm(ConversionStatusForm(fileId, format)) { _ =>
+            val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus(format))
 
-          onSuccess(conversionStatusF) {
-            case progress: OnGoing => complete(progress)
-            case NoProgress => complete("No progress available")
-            case Completed => complete("Conversion completed")
-            case _ => complete(internalError("Could not retrieve conversion status."))
+            onSuccess(conversionStatusF) {
+              case progress: OnGoing => complete(progress)
+              case NoProgress => complete("No progress available")
+              case Completed => complete("Conversion completed")
+              case result => complete(
+                internalError(s"Could not retrieve conversion status for $format: $result"))
+            }
           }
         }
       }

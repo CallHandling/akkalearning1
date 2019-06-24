@@ -10,4 +10,5 @@ object Forms {
       codec: String)
   final case class FileIdForm(fileId: String)
   final case class ConversionStatusForm(fileId: String, format: String)
+  final case class FormatForm(format: String)
 }

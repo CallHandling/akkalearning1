@@ -3,7 +3,6 @@ package com.callhandling.actors
 import akka.actor.{ActorLogging, ActorSystem, FSM, Props, Stash}
 import akka.cluster.sharding.ClusterSharding
 import com.callhandling.actors.FileActor.{Data, State}
-import com.callhandling.media.OutputFormat
 import com.callhandling.media.converters.{NoProgress, OutputArgs}
 import com.callhandling.media.processor.AudioProcessor
 import com.callhandling.media.processor.AudioProcessor._
@@ -109,7 +108,8 @@ class FileActor(system: ActorSystem) extends FSM[State, Data] with Stash with Ac
         sender() ! NoProgress
         stay
       case Event(GetConversionStatus(format), Conversion(_, progresses)) =>
-        sender() ! progresses.find(progressHasFormat(format)).getOrElse(NoProgress)
+        sender() ! progresses.find(progressHasFormat(format))
+          .map(_.progress).getOrElse(NoProgress)
         stay
     }
 
