@@ -137,7 +137,7 @@ class AudioProcessor[I, O, M](input: I, output: O)
       nextStateData match {
         case Convertible(id, _, conversionSet, timeDuration) => conversionSet.foreach {
           case Conversion(outputArgs, Converting) =>
-            lazy val inlet = MediaReader.read(input, id)
+            lazy val inlet = reader.read(input, id)
             val worker = context.actorOf(Worker.props(id, inlet, output))
             worker ! Convert(outputArgs, timeDuration)
         }
@@ -151,7 +151,7 @@ class AudioProcessor[I, O, M](input: I, output: O)
         option.map(Right(_)) getOrElse Left(alternative)
     }
 
-    val mediaStreams = MediaReader.mediaStreams(input, id)
+    val mediaStreams = MediaReader[I, M].mediaStreams(input, id)
 
     for {
       // Get the media stream information.

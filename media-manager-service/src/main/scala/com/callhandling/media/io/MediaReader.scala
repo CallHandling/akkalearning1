@@ -10,12 +10,5 @@ trait MediaReader[I, M] {
 }
 
 object MediaReader {
-  def read[I, M](input: I, id: String)(implicit reader: MediaReader[I, M]) =
-    reader.read(input, id)
-
-  def mediaStreams[I, M](input: I, id: String)(implicit reader: MediaReader[I, M]) =
-    reader.mediaStreams(input, id)
-
-  def outputFormats[I, M](input: I, id: String)(implicit reader: MediaReader[I, M]) =
-    reader.outputFormats(input, id)
+  def apply[I, M](implicit reader: MediaReader[I, M]): MediaReader[I, M] = reader
 }

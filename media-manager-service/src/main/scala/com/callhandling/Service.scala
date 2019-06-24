@@ -94,7 +94,7 @@ class Service[I, O, M](
             else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
               fileRegion ! SendToEntity(fileId, UploadStarted)
 
-              val outlet = MediaWriter.write(output, fileId)
+              val outlet = writer.write(output, fileId)
               val uploadF = byteSource.toMat(outlet)(Keep.right).run
 
               onSuccess(uploadF) { _ =>
@@ -104,8 +104,8 @@ class Service[I, O, M](
                 val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
                 onSuccess(fileDataF) {
                   case Details(_, _, description) =>
-                    val streams = MediaReader.mediaStreams(input, fileId)
-                    val outputFormats = MediaReader.outputFormats(input, fileId)
+                    val streams = reader.mediaStreams(input, fileId)
+                    val outputFormats = reader.outputFormats(input, fileId)
                     complete(UploadResult(fileId, filename, description, streams, outputFormats))
                   case _ => complete(internalError("Could not retrieve file data."))
                 }

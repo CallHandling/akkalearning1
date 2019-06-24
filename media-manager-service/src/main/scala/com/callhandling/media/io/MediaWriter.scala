@@ -8,11 +8,5 @@ trait MediaWriter[O, M] {
 }
 
 object MediaWriter {
-  def write[O, M](output: O, id: String, format: OutputFormat)
-      (implicit writer: MediaWriter[O, M]): BytesOutlet[M] =
-    writer.write(output, id, format)
-
-  def write[O, M](output: O, id: String)
-      (implicit writer: MediaWriter[O, M]): BytesOutlet[M] =
-    writer.write(output, id)
+  def apply[W, M](implicit writer: MediaWriter[W, M]): MediaWriter[W, M] = writer
 }
