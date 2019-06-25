@@ -3,8 +3,6 @@ package com.callhandling.media.io
 import akka.stream.IOResult
 import com.callhandling.media.OutputFormat
 
-import scala.concurrent.Future
-
 package object instances {
   implicit val fileReader: MediaReader[FileStreamIO, IOResult] =
     new MediaReader[FileStreamIO, IOResult] {

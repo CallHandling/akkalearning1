@@ -3,7 +3,7 @@ package com.callhandling
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.javadsl.common.{EntityStreamingSupport, JsonEntityStreamingSupport}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.HttpResponse
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse}
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
 import akka.http.scaladsl.server.Directives.{entity, path, _}
 import akka.http.scaladsl.server.RejectionHandler
@@ -11,8 +11,8 @@ import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Keep
-import akka.util.Timeout
+import akka.stream.scaladsl.{Keep, Source}
+import akka.util.{ByteString, Timeout}
 import com.callhandling.actors.{FileActor, SendToEntity}
 import com.callhandling.media.MediaStream
 import com.callhandling.media.converters.Formats.Format
@@ -63,7 +63,6 @@ class Service[I, O, M](
   import com.callhandling.web.Forms._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
-  implicit val jsonStreamingSupport: JsonEntityStreamingSupport = EntityStreamingSupport.json()
 
   implicit def formValidationRejectionHandler =
     RejectionHandler.newBuilder()
@@ -152,10 +151,14 @@ class Service[I, O, M](
   def playV1 = pathPrefix("play") {
     path(Remaining) { fileId =>
       get {
-        entity(as[FormatForm]) { case FormatForm(format) =>
-          validateForm(ConversionStatusForm(fileId, format)) { _ =>
-            val inlet = reader.read(input, fileId, format)
-            complete(inlet)
+        entity(as[OptionalFormatForm]) { case OptionalFormatForm(formatOpt) =>
+          validateForm(PlayForm(fileId, formatOpt)) { _ =>
+            // TODO check if format exists
+            val inlet = formatOpt.map { format =>
+              reader.read(input, fileId, format)
+            } getOrElse reader.read(input, fileId)
+
+            complete(HttpEntity(ContentTypes.`application/octet-stream`, inlet))
           }
         }
       }

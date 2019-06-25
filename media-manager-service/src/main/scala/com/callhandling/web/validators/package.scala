@@ -20,14 +20,16 @@ package object validators {
   implicit val fileIdFormValidator: Validator[FileIdForm] = model =>
     errorMessages(requiredId(model.fileId))
 
-  // TODO: check against the supported output formats for the file
+  // TODO: Check against the supported output formats for the file
   implicit val conversionStatusFormValidator: Validator[ConversionStatusForm] = {
     case ConversionStatusForm(fileId, format) => errorMessages(
       requiredId(fileId),
       validate("format", format))
   }
 
-  implicit val playFormValidator: Validator[PlayForm] = { case PlayForm(fileId, format) =>
+  // TODO: Format is not required, but if it exists, check it's validity
+  //  (e.g. minimum length, against available output formats, etc.).
+  implicit val playFormValidator: Validator[PlayForm] = { case PlayForm(fileId, _) =>
     errorMessages(requiredId(fileId))
   }
 
