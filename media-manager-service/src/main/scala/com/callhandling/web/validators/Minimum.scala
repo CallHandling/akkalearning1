@@ -11,7 +11,7 @@ object Minimum {
     // Default limitation for the number of characters
     override def limit = 5
 
-    override def validate(field: String) = field.length < limit
+    override def validate(field: String) = field.length > limit
 
     override def errorMessage(fieldName: String): String =
       s"$fieldName should be at least $limit characters long."

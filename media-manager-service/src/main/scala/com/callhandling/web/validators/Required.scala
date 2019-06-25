@@ -8,7 +8,7 @@ trait Required[F] extends FieldValidation[F] {
 object Required {
   def apply[F](implicit required: Required[F]): Required[F] = required
 
-  implicit val requiredString: Required[String] = _.isEmpty
+  implicit val requiredString: Required[String] = !_.isEmpty
 
-  implicit val requiredInt: Required[Int] = _ <= 0
+  implicit val requiredInt: Required[Int] = _ > 0
 }

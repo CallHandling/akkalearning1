@@ -1,6 +1,5 @@
 package com.callhandling
 
-import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.javadsl.common.{EntityStreamingSupport, JsonEntityStreamingSupport}
 import akka.http.scaladsl.Http
@@ -11,22 +10,20 @@ import akka.http.scaladsl.server.RejectionHandler
 import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.pattern.ask
-import akka.stream.{ActorMaterializer, IOResult}
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source, StreamConverters}
-import akka.util.{ByteString, Timeout}
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Keep
+import akka.util.Timeout
 import com.callhandling.actors.{FileActor, SendToEntity}
-import com.callhandling.web.JsonSupport._
-import com.callhandling.web.validators.FormValidationRejection
-import com.callhandling.web.validators.Validator._
-import com.callhandling.web.validators._
 import com.callhandling.media.MediaStream
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.converters.{Completed, NoProgress, OnGoing, OutputArgs}
 import com.callhandling.media.io.{MediaReader, MediaWriter}
+import com.callhandling.web.JsonSupport._
+import com.callhandling.web.validators.Validator._
+import com.callhandling.web.validators._
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.ExecutionContextExecutor
 import scala.io.StdIn
-import scala.util.Success
 
 object Service {
   final case class FileIdResult(fileId: String)
@@ -62,8 +59,8 @@ class Service[I, O, M](
         reader: MediaReader[I, M],
         writer: MediaWriter[O, M]) {
   import FileActor._
-  import com.callhandling.web.Forms._
   import Service._
+  import com.callhandling.web.Forms._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
   implicit val jsonStreamingSupport: JsonEntityStreamingSupport = EntityStreamingSupport.json()
