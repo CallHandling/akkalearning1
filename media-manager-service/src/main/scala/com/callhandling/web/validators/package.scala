@@ -20,7 +20,6 @@ package object validators {
   implicit val fileIdFormValidator: Validator[FileIdForm] = model =>
     errorMessages(requiredId(model.fileId))
 
-  // TODO: Check against the supported output formats for the file
   implicit val conversionStatusFormValidator: Validator[ConversionStatusForm] = {
     case ConversionStatusForm(fileId, format) => errorMessages(
       requiredId(fileId),

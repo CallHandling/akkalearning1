@@ -34,8 +34,6 @@ class FileStreamIO(storagePath: String) {
     val basePath = filePath(id).getParent
     val suffix = format.map("_" + _).getOrElse("")
 
-    // TODO: Perhaps we need to improve this one, making the path unique so
-    //  as to avoid multiple workers writing to the same file
     basePath.resolve(s"$id$suffix")
   }
 }

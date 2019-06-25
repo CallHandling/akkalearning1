@@ -64,7 +64,7 @@ class Service[I, O, M](
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
 
-  implicit def formValidationRejectionHandler =
+  implicit def formValidationRejectionHandler: RejectionHandler =
     RejectionHandler.newBuilder()
       .handle { case FormValidationRejection(invalidFields) =>
         complete(invalidFields)
@@ -122,9 +122,13 @@ class Service[I, O, M](
         entity(as[ConvertFileForm]) { form =>
           validateForm(form) { case ConvertFileForm(fileId, format, channels, sampleRate, codec) =>
             val outputArgs = OutputArgs(format, channels, sampleRate, codec)
-            fileRegion ! SendToEntity(
-              fileId, RequestForConversion(Vector(outputArgs)))
-            complete("Conversion Started")
+
+            val validFormat = reader.outputFormats(input, fileId).exists(_.code == format)
+            if (validFormat) {
+              fileRegion ! SendToEntity(
+                fileId, RequestForConversion(Vector(outputArgs)))
+              complete("Conversion Started")
+            } else complete(internalError("Invalid format"))
           }
         }
       }
@@ -153,8 +157,9 @@ class Service[I, O, M](
       get {
         entity(as[OptionalFormatForm]) { case OptionalFormatForm(formatOpt) =>
           validateForm(PlayForm(fileId, formatOpt)) { _ =>
-            // TODO check if format exists
             val inlet = formatOpt.map { format =>
+              // TODO check if format exists from the input
+              //  (e.g. with FileStreamIO you get file not found exception)
               reader.read(input, fileId, format)
             } getOrElse reader.read(input, fileId)
 
