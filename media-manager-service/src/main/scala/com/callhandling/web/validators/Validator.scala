@@ -8,15 +8,10 @@ trait Validator[F] extends (F => Seq[FieldErrorInfo])
 object Validator {
   def validateForm[F](form: F)(f: F => Route)(implicit validator: Validator[F]): Route = {
     validator(form) match {
-      case Vector.empty => provide(form)(f)
+      case Vector() => provide(form)(f)
       case errors: Vector[FieldErrorInfo] => reject(FormValidationRejection(errors))
     }
   }
-
-  /*
-  def validateField[V](validation: FieldValidation[V], fieldName: String, field: Any): Option[FieldErrorInfo] =
-    if(validation.rule(field)) Some(FieldErrorInfo(fieldName, validation.errorMessage(fieldName)))
-    else None*/
 
   def validate[F](fieldName: String, field: F)(implicit validation: FieldValidation[F]) =
     if (validation.validate(field)) Some(FieldErrorInfo(fieldName, validation.errorMessage(fieldName)))

@@ -5,14 +5,11 @@ import com.callhandling.web.validators.Required._
 import com.callhandling.web.validators.Validator._
 
 package object validators {
-  type Rule[A] = A => Boolean
-
-  implicit val uploadFileFormValidator: Validator[UploadFileForm] = model =>
-    validate(minValidation(5), "description", model.description).toVector
+  implicit val uploadFileFormValidator: Validator[UploadFileForm] = model => errorMessages(
+    validate("description", model.description)(Minimum[String]))
 
   implicit val convertFileFormValidator: Validator[ConvertFileForm] = {
-    case ConvertFileForm(fileId, format, channels, sampleRate, codec) =>
-      errorMessages(
+    case ConvertFileForm(fileId, format, channels, sampleRate, codec) => errorMessages(
       requiredId(fileId),
       validate("format", format)(Required[String]),
       validate("channels", channels)(Required[Int]),
