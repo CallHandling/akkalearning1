@@ -1,10 +1,14 @@
 package com.callhandling.web
 
+import akka.http.scaladsl.server.Rejection
 import com.callhandling.web.Forms._
 import com.callhandling.web.validators.Required._
 import com.callhandling.web.validators.Validator._
 
 package object validators {
+  final case class FieldErrorInfo(name: String, error: String)
+  final case class FormValidationRejection(invalidFields: Vector[FieldErrorInfo]) extends Rejection
+
   implicit val uploadFileFormValidator: Validator[UploadFileForm] = model => errorMessages(
     validate("description", model.description)(Minimum[String]))
 
