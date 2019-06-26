@@ -1,12 +1,14 @@
 package com.callhandling.media.io.instances
 
+import java.io.File
 import java.nio.file.{Path, Paths}
 
+import cats.syntax.either._
 import akka.stream.IOResult
 import akka.stream.scaladsl.FileIO
 import com.callhandling.media.converters.Formats
 import com.callhandling.media.converters.Formats.Format
-import com.callhandling.media.io.{BytesInlet, BytesOutlet}
+import com.callhandling.media.io.{BytesInlet, BytesOutlet, IOError, InletOr, MediaNotFound}
 import com.callhandling.media.{MediaID, MediaStream, OutputFormat}
 import com.callhandling.util.FileUtil._
 
@@ -14,8 +16,13 @@ class FileStreamIO(storagePath: String) {
   import FileStreamIO._
 
   def read: MediaID => FileByteSource = filePath andThen pathToSource
-  def read(id: MediaID, format: OutputFormat): FileByteSource =
-    pathToSource(formatPath(id, Some(format)))
+
+  def read(id: MediaID, format: OutputFormat): InletOr[IOResult] = {
+    val path = formatPath(id, Some(format))
+
+    if (new File(pathString(path)).isFile) pathToSource(path).asRight[IOError]
+    else MediaNotFound.asLeft[FileByteSource]
+  }
 
   def mediaStreams: MediaID => Vector[MediaStream] =
     filePathString andThen MediaStream.extractFrom

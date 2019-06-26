@@ -57,6 +57,8 @@ lazy val `media-manager-service` = project
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % v.jackson,
 
       "com.lightbend.akka" %% "akka-stream-alpakka-s3" % "1.0.2",
+
+      "org.typelevel" %% "cats-core" % "1.0.0"
     )
   )
 

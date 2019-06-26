@@ -6,7 +6,7 @@ import com.callhandling.media.OutputFormat
 package object instances {
   implicit val fileReader: MediaReader[FileStreamIO, IOResult] =
     new MediaReader[FileStreamIO, IOResult] {
-      override def read(input: FileStreamIO, id: String) = input.read(id)
+      override def read(input: FileStreamIO, id: String) = Right(input.read(id))
 
       override def read(input: FileStreamIO, id: String, format: String) =
         input.read(id, format)
@@ -21,8 +21,8 @@ package object instances {
   implicit val fileWriter: MediaWriter[FileStreamIO, IOResult] =
     new MediaWriter[FileStreamIO, IOResult] {
       override def write(output: FileStreamIO, id: String, outputFormat: OutputFormat) =
-        output.write(id, Some(outputFormat))
+        Right(output.write(id, Some(outputFormat)))
 
-      override def write(output: FileStreamIO, id: String) = output.write(id, None)
+      override def write(output: FileStreamIO, id: String) = Right(output.write(id, None))
     }
 }

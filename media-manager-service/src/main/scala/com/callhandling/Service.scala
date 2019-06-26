@@ -1,23 +1,25 @@
 package com.callhandling
 
 import akka.actor.{ActorRef, ActorSystem}
-import akka.http.javadsl.common.{EntityStreamingSupport, JsonEntityStreamingSupport}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse}
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives.{entity, path, _}
 import akka.http.scaladsl.server.RejectionHandler
 import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Keep, Source}
-import akka.util.{ByteString, Timeout}
+import akka.stream.scaladsl.Keep
+import akka.util.Timeout
+import cats.data.EitherT
+import cats.instances.option._
+import cats.syntax.either._
 import com.callhandling.actors.{FileActor, SendToEntity}
 import com.callhandling.media.MediaStream
 import com.callhandling.media.converters.Formats.Format
-import com.callhandling.media.converters.{Completed, NoProgress, OnGoing, OutputArgs}
-import com.callhandling.media.io.{MediaReader, MediaWriter}
+import com.callhandling.media.converters._
+import com.callhandling.media.io.{MediaNotFound, MediaReader, MediaWriter}
 import com.callhandling.web.JsonSupport._
 import com.callhandling.web.validators.Validator._
 import com.callhandling.web.validators._
@@ -93,21 +95,25 @@ class Service[I, O, M](
             else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
               fileRegion ! SendToEntity(fileId, UploadStarted)
 
-              val outlet = writer.write(output, fileId)
-              val uploadF = byteSource.toMat(outlet)(Keep.right).run
+              val uploadFutureOr = for {
+                outlet <- writer.write(output, fileId)
+              } yield byteSource.toMat(outlet)(Keep.right).run
 
-              onSuccess(uploadF) { _ =>
-                fileRegion ! SendToEntity(fileId, UploadCompleted)
-                fileRegion ! SendToEntity(fileId, SetFilename(filename))
+              uploadFutureOr match {
+                case Right(uploadF) => onSuccess(uploadF) { _ =>
+                  fileRegion ! SendToEntity(fileId, UploadCompleted)
+                  fileRegion ! SendToEntity(fileId, SetFilename(filename))
 
-                val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
-                onSuccess(fileDataF) {
-                  case Details(_, _, description) =>
-                    val streams = reader.mediaStreams(input, fileId)
-                    val outputFormats = reader.outputFormats(input, fileId)
-                    complete(UploadResult(fileId, filename, description, streams, outputFormats))
-                  case _ => complete(internalError("Could not retrieve file data."))
+                  val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
+                  onSuccess(fileDataF) {
+                    case Details(_, _, description) =>
+                      val streams = reader.mediaStreams(input, fileId)
+                      val outputFormats = reader.outputFormats(input, fileId)
+                      complete(UploadResult(fileId, filename, description, streams, outputFormats))
+                    case _ => complete(internalError("Could not retrieve file data."))
+                  }
                 }
+                case Left(_) => complete(internalError("Unable to write to file"))
               }
             }
           }
@@ -157,13 +163,17 @@ class Service[I, O, M](
       get {
         entity(as[OptionalFormatForm]) { case OptionalFormatForm(formatOpt) =>
           validateForm(PlayForm(fileId, formatOpt)) { _ =>
-            val inlet = formatOpt.map { format =>
-              // TODO check if format exists from the input
-              //  (e.g. with FileStreamIO you get file not found exception)
-              reader.read(input, fileId, format)
-            } getOrElse reader.read(input, fileId)
+            val inletOpt = formatOpt
+              .map(reader.read(input, fileId, _))
+              .orElse(Some(reader.read(input, fileId)))
 
-            complete(HttpEntity(ContentTypes.`application/octet-stream`, inlet))
+            val successOr = for {
+              inlet <- EitherT(inletOpt)
+            } yield complete(HttpEntity(ContentTypes.`application/octet-stream`, inlet))
+
+            successOr.value.get.valueOr {
+              case MediaNotFound => complete(internalError("Media not found."))
+            }
           }
         }
       }

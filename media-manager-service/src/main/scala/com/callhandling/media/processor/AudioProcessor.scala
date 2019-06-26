@@ -2,11 +2,12 @@ package com.callhandling.media.processor
 
 import akka.actor.{ActorLogging, ActorRef, FSM, Props}
 import akka.stream.ActorMaterializer
-import com.callhandling.media.OutputFormat
+import cats.syntax.either._
 import com.callhandling.media.converters._
 import com.callhandling.media.io.{MediaReader, MediaWriter}
 import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
+import com.callhandling.media.{MediaStream, OutputFormat}
 
 object AudioProcessor {
   val RegionName = "AudioProcessor"
@@ -137,29 +138,28 @@ class AudioProcessor[I, O, M](input: I, output: O)
       nextStateData match {
         case Convertible(id, _, conversionSet, timeDuration) => conversionSet.foreach {
           case Conversion(outputArgs, Converting) =>
-            lazy val inlet = reader.read(input, id)
-            val worker = context.actorOf(Worker.props(id, inlet, output))
-            worker ! Convert(outputArgs, timeDuration)
+            val workerOr = for {
+              inlet <- reader.read(input, id)
+            } yield context.actorOf(Worker.props(id, inlet, output))
+
+            workerOr.foreach(_ ! Convert(outputArgs, timeDuration))
         }
       }
     case Converting -> Idle => log.info("Conversion completed.")
   }
 
   def prepareConversion(id: String): Either[ConversionError, Float] = {
-    implicit class OptionToEither[S](option: Option[S]) {
-      def asEither[E](alternative: => E): Either[E, S] =
-        option.map(Right(_)) getOrElse Left(alternative)
-    }
-
     val mediaStreams = MediaReader[I, M].mediaStreams(input, id)
 
     for {
       // Get the media stream information.
-      mediaStream <- mediaStreams.headOption.asEither(NoMediaStreamAvailable)
+      mediaStream <- Either.fromOption[ConversionError, MediaStream](
+        mediaStreams.headOption, NoMediaStreamAvailable)
 
       // Extract the time duration. This will be needed to compute the
       // progress percentage.
-      timeDuration <- mediaStream.time.duration.asEither(StreamInfoIncomplete)
+      timeDuration <- Either.fromOption[ConversionError, Float](
+        mediaStream.time.duration, StreamInfoIncomplete)
     } yield timeDuration
   }
 
