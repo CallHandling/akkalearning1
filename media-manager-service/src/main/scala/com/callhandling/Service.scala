@@ -8,11 +8,13 @@ import akka.http.scaladsl.server.Directives.{entity, path, _}
 import akka.http.scaladsl.server.RejectionHandler
 import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
+import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Keep
 import akka.util.Timeout
 import cats.data.EitherT
+import cats.data.Validated.{Invalid, Valid}
 import cats.instances.option._
 import cats.syntax.either._
 import com.callhandling.actors.{FileActor, SendToEntity}
@@ -21,10 +23,9 @@ import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.converters._
 import com.callhandling.media.io.{IOValidation, MediaNotFound, MediaReader, MediaWriter}
 import com.callhandling.web.JsonSupport._
-import com.callhandling.web.validators.Validator._
 import com.callhandling.web.validators._
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 object Service {
@@ -50,6 +51,18 @@ object Service {
           reader: MediaReader[I, M],
           writer: MediaWriter[O, M]) =
     new Service(fileRegion, audioProcessorRegion, input, output)
+
+  implicit class ValidationRequestMarshaller[A](um: FromRequestUnmarshaller[A]) {
+    def validate(implicit validation: FormValidation[A]) = um.flatMap { _ => _ => entity =>
+      validateForm(entity) match {
+        case Valid(_) => Future.successful(entity)
+        case Invalid(failures) =>
+          val message = failures.toNonEmptyVector
+            .map(_.errorMessage).toVector.mkString("\n")
+          Future.failed(new IllegalArgumentException(message))
+      }
+    }
+  }
 }
 
 class Service[I, O, M](
@@ -66,30 +79,21 @@ class Service[I, O, M](
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
 
-  implicit def formValidationRejectionHandler: RejectionHandler =
-    RejectionHandler.newBuilder()
-      .handle { case FormValidationRejection(invalidFields) =>
-        complete(invalidFields)
-      }
-      .result()
-
   def uploadV1 = pathPrefix("upload") {
     pathEndOrSingleSlash {
       post {
-        entity(as[UploadFileForm]) { form =>
-          validateForm(form) { case UploadFileForm(description) =>
-            val fileId = FileActor.generateId
-            fileRegion ! SendToEntity(fileId, SetId(fileId))
-            fileRegion ! SendToEntity(fileId, SetDescription(description))
-            complete(FileIdResult(fileId))
-          }
+        entity(as[UploadFileForm].validate) { case UploadFileForm(description) =>
+          val fileId = FileActor.generateId
+          fileRegion ! SendToEntity(fileId, SetId(fileId))
+          fileRegion ! SendToEntity(fileId, SetDescription(description))
+          complete(FileIdResult(fileId))
         }
       }
     } ~
     withoutSizeLimit {
       path(Remaining) { fileId =>
         put {
-          validateForm(FileIdForm(fileId)) { _ =>
+          entity(as[FileIdForm].validate) { _ =>
             //TODO: Add checking for valid vform.fileId on fileListActor
             if (false) complete(internalError("Media not found: " + fileId))
             else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
@@ -125,8 +129,8 @@ class Service[I, O, M](
   def convertV1 = pathPrefix("convert") {
     pathEndOrSingleSlash {
       post {
-        entity(as[ConvertFileForm]) { form =>
-          validateForm(form) { case ConvertFileForm(fileId, format, channels, sampleRate, codec) =>
+        entity(as[ConvertFileForm].validate) {
+          case ConvertFileForm(fileId, format, channels, sampleRate, codec) =>
             val outputArgs = OutputArgs(format, channels, sampleRate, codec)
 
             val validFormat = reader.outputFormats(input, fileId).exists(_.code == format)
@@ -135,23 +139,20 @@ class Service[I, O, M](
                 fileId, RequestForConversion(Vector(outputArgs)))
               complete("Conversion Started")
             } else complete(internalError("Invalid format"))
-          }
         }
       }
     } ~
     path("status" / Remaining) { fileId =>
       get {
-        entity(as[FormatForm]) { case FormatForm(format) =>
-          validateForm(ConversionStatusForm(fileId, format)) { _ =>
-            val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus(format))
+        entity(as[FormatForm].validate) { case FormatForm(format) =>
+          val conversionStatusF = fileRegion ? SendToEntity(fileId, GetConversionStatus(format))
 
-            onSuccess(conversionStatusF) {
-              case progress: OnGoing => complete(progress)
-              case NoProgress => complete("No progress available")
-              case Completed => complete("Conversion completed")
-              case result => complete(
-                internalError(s"Could not retrieve conversion status for $format: $result"))
-            }
+          onSuccess(conversionStatusF) {
+            case progress: OnGoing => complete(progress)
+            case NoProgress => complete("No progress available")
+            case Completed => complete("Conversion completed")
+            case result => complete(
+              internalError(s"Could not retrieve conversion status for $format: $result"))
           }
         }
       }
@@ -162,18 +163,16 @@ class Service[I, O, M](
     path(Remaining) { fileId =>
       get {
         entity(as[OptionalFormatForm]) { case OptionalFormatForm(formatOpt) =>
-          validateForm(PlayForm(fileId, formatOpt)) { _ =>
-            val inletOpt = formatOpt
-              .map(reader.read(input, fileId, _))
-              .orElse(Some(reader.read(input, fileId)))
+          val inletOpt = formatOpt
+            .map(reader.read(input, fileId, _))
+            .orElse(Some(reader.read(input, fileId)))
 
-            val successOr = for {
-              inlet <- EitherT(inletOpt)
-            } yield complete(HttpEntity(ContentTypes.`application/octet-stream`, inlet))
+          val successOr = for {
+            inlet <- EitherT(inletOpt)
+          } yield complete(HttpEntity(ContentTypes.`application/octet-stream`, inlet))
 
-            successOr.value.get.valueOr {
-              error: IOValidation => complete(internalError(error.errorMessage))
-            }
+          successOr.value.get.valueOr {
+            error: IOValidation => complete(internalError(error.errorMessage))
           }
         }
       }
