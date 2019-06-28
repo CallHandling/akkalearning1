@@ -12,7 +12,7 @@ trait FieldValidator {
     req(field)
 
   def minimum[F](field: F, limit: Int)(implicit min: Minimum[F]): Boolean =
-    min(field)
+    min(field, limit)
 
   def validateRequired[F: Required](field: F, fieldName: String): ValidationResult[F] =
     Either.cond(
@@ -26,7 +26,7 @@ trait FieldValidator {
       field,
       BelowMinimumLength(fieldName, limit)).toValidatedNec
 
-  implicit val minimumString: Minimum[String] = _.length > _
+  implicit val minimumString: Minimum[String] = _.length >= _
 
   implicit val minimumInt: Minimum[Int] = _ >= _
 
