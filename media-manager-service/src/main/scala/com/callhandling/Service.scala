@@ -53,12 +53,11 @@ object Service {
 
   implicit class ValidationRequestMarshaller[A](um: FromRequestUnmarshaller[A]) {
     def validate(implicit validation: FormValidation[A]) = um.flatMap { _ => _ => entity =>
-      validateForm(entity) match {
+      validateForm(entity) {
         case Valid(_) => Future.successful(entity)
         case Invalid(failures) =>
-          val message = failures.toNonEmptyVector
-            .map(_.errorMessage).toVector.mkString("\n")
-          Future.failed(new IllegalArgumentException(message))
+          Future.failed(new IllegalArgumentException(
+            failures.iterator.map(_.errorMessage).mkString("\n")))
       }
     }
   }
@@ -92,33 +91,36 @@ class Service[I, O, M](
     withoutSizeLimit {
       path(Remaining) { fileId =>
         put {
-          entity(as[FileIdForm].validate) { _ =>
-            //TODO: Add checking for valid vform.fileId on fileListActor
-            if (false) complete(internalError("Media not found: " + fileId))
-            else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
-              fileRegion ! SendToEntity(fileId, UploadStarted)
+          validateForm(FileIdForm(fileId)) {
+            case Valid(_) =>
+              //TODO: Add checking for valid vform.fileId on fileListActor
+              if (false) complete(internalError("Media not found: " + fileId))
+              else fileUpload("file") { case (FileInfo(_, filename, _), byteSource) =>
+                fileRegion ! SendToEntity(fileId, UploadStarted)
 
-              val uploadFutureOr = for {
-                outlet <- writer.write(output, fileId)
-              } yield byteSource.toMat(outlet)(Keep.right).run
+                val uploadFutureOr = for {
+                  outlet <- writer.write(output, fileId)
+                } yield byteSource.toMat(outlet)(Keep.right).run
 
-              uploadFutureOr match {
-                case Right(uploadF) => onSuccess(uploadF) { _ =>
-                  fileRegion ! SendToEntity(fileId, UploadCompleted)
-                  fileRegion ! SendToEntity(fileId, SetFilename(filename))
+                uploadFutureOr match {
+                  case Right(uploadF) => onSuccess(uploadF) { _ =>
+                    fileRegion ! SendToEntity(fileId, UploadCompleted)
+                    fileRegion ! SendToEntity(fileId, SetFilename(filename))
 
-                  val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
-                  onSuccess(fileDataF) {
-                    case Details(_, _, description) =>
-                      val streams = reader.mediaStreams(input, fileId)
-                      val outputFormats = reader.outputFormats(input, fileId)
-                      complete(UploadResult(fileId, filename, description, streams, outputFormats))
-                    case _ => complete(internalError("Could not retrieve file data."))
+                    val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
+                    onSuccess(fileDataF) {
+                      case Details(_, _, description) =>
+                        val streams = reader.mediaStreams(input, fileId)
+                        val outputFormats = reader.outputFormats(input, fileId)
+                        complete(UploadResult(fileId, filename, description, streams, outputFormats))
+                      case _ => complete(internalError("Could not retrieve file data."))
+                    }
                   }
+                  case Left(_) => complete(internalError("Unable to write to file"))
                 }
-                case Left(_) => complete(internalError("Unable to write to file"))
               }
-            }
+            case Invalid(failures) => complete(internalError(
+              failures.iterator.map(_.errorMessage).mkString("\n")))
           }
         }
       }

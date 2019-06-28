@@ -9,8 +9,8 @@ trait FormValidator {
   type ValidationResult[A] = ValidatedNec[RequestValidation, A]
   type FormValidation[F] = F => ValidationResult[F]
 
-  def validateForm[F](form: F)(implicit formValidation: FormValidation[F]) =
-    formValidation(form)
+  def validateForm[F, A](form: F)(f: ValidationResult[F] => A)(implicit formValidation: FormValidation[F]): A =
+    f(formValidation(form))
 
   def requiredId[F: Required](fileId: F) = validateRequired(fileId, "fileId")
 
