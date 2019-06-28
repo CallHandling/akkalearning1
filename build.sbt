@@ -1,105 +1,93 @@
-ThisBuild / version      := "0.1.0"
-ThisBuild / scalaVersion := "2.12.8"
-ThisBuild / organization := "com.callhandling"
+import sbt.Keys._
+import sbt.Project.projectToRef
+// shadow sbt-scalajs' crossProject and CrossType from Scala.js 0.6.x
+import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
+import org.irundaia.sbt.sass._
 
-lazy val v = new {
-  val akka = "2.5.22"
-  val akkaHttp = "10.1.8"
-  val scalatest = "3.0.7"
-  val junit = "4.12"
-  val cassandraPlugin = "0.96"
-  val gatling = "3.1.2"
-  val jackson = "2.9.9"
-}
+// a special crossProject for configuring a JS/JVM/shared structure
+lazy val shared = (crossProject(JSPlatform, JVMPlatform).crossType(CrossType.Pure) in file("shared"))
+  .settings(
+    scalaVersion := Settings.v.scala,
+    libraryDependencies ++= Settings.sharedDependencies.value
+  )
+  // set up settings specific to the JS project
+  .jsConfigure(_ enablePlugins ScalaJSWeb)
 
-// This is an application with a main method
-scalaJSUseMainModuleInitializer := true
-javaOptions in Gatling := overrideDefaultJavaOptions("-Xms1024m", "-Xmx2048m")
-lazy val `media-file-encoder` = project.in(file("."))
-  .aggregate(`media-manager-service`, `media-manager-state`, `media-manager-app`)
-  .enablePlugins(JavaAppPackaging)
+lazy val sharedJVM = shared.jvm.settings(name := "sharedJVM")
+
+lazy val sharedJS = shared.js.settings(name := "sharedJS")
+
+// use eliding to drop some debug code in the production build
+lazy val elideOptions = settingKey[Seq[String]]("Set limit for elidable functions")
+
+// instantiate the JS project for SBT with some additional settings
+lazy val client: Project = project
+  .settings(
+    version := Settings.v.app,
+    scalaVersion := Settings.v.scala,
+    scalacOptions ++= Settings.scalacOptions,
+    libraryDependencies ++= Settings.scalajsDependencies.value,
+    // by default we do development build, no eliding
+    elideOptions := Seq(),
+    scalacOptions ++= elideOptions.value,
+    jsDependencies ++= Settings.jsDependencies.value,
+    // RuntimeDOM is needed for tests
+    jsEnv in Test := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv,
+    // yes, we want to package JS dependencies
+    skip in packageJSDependencies := false,
+    // use Scala.js provided launcher code to start the client app
+    scalaJSUseMainModuleInitializer := true,
+    scalaJSUseMainModuleInitializer in Test := false,
+    // use uTest framework for tests
+    testFrameworks += new TestFramework("utest.runner.Framework"),
+    dependencyOverrides ++= Settings.dependencyOverrides.value
+  )
+  .enablePlugins(ScalaJSPlugin, ScalaJSWeb)
+  .dependsOn(sharedJS)
+
+// Client projects (just one in this case)
+lazy val clients = Seq(client)
+
+// instantiate the JVM project for SBT with some additional settings
+lazy val server = project
+  .settings(
+    version := Settings.v.app,
+    scalaVersion := Settings.v.scala,
+    scalacOptions ++= Settings.scalacOptions,
+    libraryDependencies ++= Settings.jvmDependencies.value,
+    commands += ReleaseCmd,
+    // triggers scalaJSPipeline when using compile or continuous compilation
+    compile in Compile := ((compile in Compile) dependsOn scalaJSPipeline).value,
+    // connect to the client project
+    scalaJSProjects := clients,
+    pipelineStages in Assets := Seq(scalaJSPipeline),
+    pipelineStages := Seq(digest, gzip),
+    // compress CSS
+    SassKeys.cssStyle in Assets := Minified,
+    dependencyOverrides ++= Settings.dependencyOverrides.value,
+    WebKeys.packagePrefix in Assets := "public/",
+    managedClasspath in Runtime += (packageBin in Assets).value
+  )
+  .enablePlugins(SbtWeb, SbtTwirl, JavaAppPackaging)
   // issue: double entry on compiled protobuf source folders, remove the other one
   .enablePlugins(ProtobufPlugin) // protobuf:protobufGenerate
   .enablePlugins(GatlingPlugin) // gatling:test
-  .enablePlugins(ScalaJSPlugin)
+  .aggregate(clients.map(projectToRef): _*)
+  .dependsOn(sharedJVM)
 
-lazy val `media-manager-service` = project
-  .dependsOn(`media-manager-state`)
-  .enablePlugins(GatlingPlugin)
-  .settings(
-    // TODO: Clean this up and remove the unnecessary dependencies
-    libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % v.scalatest % Test,
-      "io.gatling.highcharts" % "gatling-charts-highcharts" % v.gatling % Test,
-      "io.gatling" % "gatling-test-framework" % v.gatling % Test,
+// Command for building a release with play
+lazy val ReleaseCmd = Command.command("release") {
+  state => "set elideOptions in client := Seq(\"-Xelide-below\", \"WARNING\")" ::
+    "client/clean" ::
+    "client/test" ::
+    "server/clean" ::
+    "server/test" ::
+    "server/dist" ::
+    "set elideOptions in client := Seq()" ::
+    state
+}
 
-      "com.typesafe.akka" %% "akka-actor" % v.akka,
-      "com.typesafe.akka" %% "akka-stream" % v.akka,
-      "com.typesafe.akka" %% "akka-http"   % v.akkaHttp,
-      "com.typesafe.akka" %% "akka-http-spray-json" % v.akkaHttp,
+// lazy val root = (project in file(".")).aggregate(client, server)
 
-      "com.github.kokorin.jaffree" % "jaffree" % "0.8.3",
-
-      "org.slf4j" % "slf4j-api" % "1.7.25",
-
-      "org.apache.tika" % "tika-core" % "1.21",
-
-      "com.typesafe.akka" %% "akka-actor-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-stream-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-cluster-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-persistence-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-persistence-cassandra" % v.cassandraPlugin,
-      // this allows us to start cassandra from the sample
-      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
-      "de.heikoseeberger" %% "akka-http-jackson" % "1.25.2",
-      "com.fasterxml.jackson.core" % "jackson-databind" % v.jackson,
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % v.jackson,
-
-      "com.lightbend.akka" %% "akka-stream-alpakka-s3" % "1.0.2",
-
-      "org.typelevel" %% "cats-core" % "1.0.0"
-    )
-  )
-
-lazy val `media-manager-state` = project
-  .settings(
-    resolvers += Resolver.bintrayRepo("julien-lafont", "maven"),
-    libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % v.scalatest % Test,
-      "junit" % "junit" % v.junit % Test,
-      "com.novocode" % "junit-interface" % "0.11" % "test",
-      "com.typesafe.akka" %% "akka-actor-testkit-typed" % v.akka % Test,
-
-      "com.typesafe.akka" %% "akka-actor" % v.akka,
-      "com.typesafe.akka" %% "akka-actor-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-stream" % v.akka,
-      "com.typesafe.akka" %% "akka-stream-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-cluster-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-persistence-typed" % v.akka,
-      "com.typesafe.akka" %% "akka-persistence-query" % v.akka,
-      "com.typesafe.akka" %% "akka-persistence-cassandra" % v.cassandraPlugin,
-      // this allows us to start cassandra from the sample
-      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % v.cassandraPlugin,
-
-      "com.typesafe.akka" %% "akka-http" % v.akkaHttp,
-
-      "de.heikoseeberger" %% "akka-http-jackson" % "1.25.2",
-      "com.fasterxml.jackson.core" % "jackson-databind" % v.jackson,
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % v.jackson,
-
-      "ws.schild" % "jave-core" % "2.4.6",
-      "ws.schild" % "jave-native-linux64" % "2.4.6",
-    )
-  )
-  .enablePlugins(ProtobufPlugin)
-
-lazy val `media-manager-app` = project
-  .dependsOn(`media-manager-service`)
-  .settings(
-    libraryDependencies ++= Seq(
-//      "org.scala-js" %%% "scalajs-dom" % "0.9.7"
-    )
-  )
-
+// loads the akka http server project at sbt startup
+onLoad in Global := (onLoad in Global).value andThen {s: State => "project server" :: s}
