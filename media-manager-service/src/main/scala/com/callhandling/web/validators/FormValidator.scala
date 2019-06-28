@@ -34,12 +34,6 @@ trait FormValidator {
     requiredId(fileId).map(FileIdForm)
   }
 
-  // TODO: Check if format belongs to the supported output formats of the file
-  implicit lazy val conversionStatusFormValidation: FormValidation[ConversionStatusForm] = {
-    case ConversionStatusForm(fileId, format) => (
-      requiredId(fileId), requiredFormat(format)).mapN(ConversionStatusForm)
-  }
-
   implicit lazy val formatFormValidation: FormValidation[FormatForm] = { case FormatForm(format) =>
     requiredFormat(format).map(FormatForm)
   }
