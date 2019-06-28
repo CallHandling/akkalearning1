@@ -5,7 +5,6 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.StatusCodes.InternalServerError
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives.{entity, path, _}
-import akka.http.scaladsl.server.RejectionHandler
 import akka.http.scaladsl.server.directives.FileInfo
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
@@ -21,7 +20,7 @@ import com.callhandling.actors.{FileActor, SendToEntity}
 import com.callhandling.media.MediaStream
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.converters._
-import com.callhandling.media.io.{IOValidation, MediaNotFound, MediaReader, MediaWriter}
+import com.callhandling.media.io.{IOValidation, MediaReader, MediaWriter}
 import com.callhandling.web.JsonSupport._
 import com.callhandling.web.validators._
 
