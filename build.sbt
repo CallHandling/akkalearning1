@@ -58,7 +58,7 @@ lazy val `media-manager-service` = project
 
       "com.lightbend.akka" %% "akka-stream-alpakka-s3" % "1.0.2",
 
-      "org.typelevel" %% "cats-core" % "1.0.0"
+      "org.typelevel" %% "cats-core" % "2.0.0-M1"
     )
   )
 
@@ -102,4 +102,6 @@ lazy val `media-manager-app` = project
 //      "org.scala-js" %%% "scalajs-dom" % "0.9.7"
     )
   )
+
+scalacOptions += "-Ypartial-unification"
 

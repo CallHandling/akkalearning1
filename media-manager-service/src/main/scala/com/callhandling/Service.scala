@@ -19,7 +19,7 @@ import com.callhandling.actors.{FileActor, SendToEntity}
 import com.callhandling.media.MediaStream
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.converters._
-import com.callhandling.media.io.{MediaNotFound, MediaReader, MediaWriter}
+import com.callhandling.media.io.{IOValidation, MediaNotFound, MediaReader, MediaWriter}
 import com.callhandling.web.JsonSupport._
 import com.callhandling.web.validators.Validator._
 import com.callhandling.web.validators._
@@ -62,7 +62,7 @@ class Service[I, O, M](
         writer: MediaWriter[O, M]) {
   import FileActor._
   import Service._
-  import com.callhandling.web.Forms._
+  import com.callhandling.web.Form._
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
 
@@ -172,7 +172,7 @@ class Service[I, O, M](
             } yield complete(HttpEntity(ContentTypes.`application/octet-stream`, inlet))
 
             successOr.value.get.valueOr {
-              case MediaNotFound => complete(internalError("Media not found."))
+              error: IOValidation => complete(internalError(error.errorMessage))
             }
           }
         }

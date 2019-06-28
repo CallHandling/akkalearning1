@@ -16,7 +16,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.scaladsl.Source
 import akka.stream.typed.scaladsl.ActorMaterializer
 import akka.util.Timeout
-import com.callhandling.web.Forms._
+import com.callhandling.web.Form._
 import com.callhandling.web.JsonSupport._
 import com.callhandling.web.validators.Validator._
 import com.callhandling.Service.{FileIdResult, UploadResult}

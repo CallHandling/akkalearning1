@@ -1,6 +1,6 @@
 package com.callhandling.web
 
-object Forms {
+object Form {
   final case class UploadFileForm(description: String) extends AnyVal
 
   final case class ConvertFileForm(

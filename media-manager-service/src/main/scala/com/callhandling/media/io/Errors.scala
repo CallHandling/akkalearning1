@@ -1,5 +1,9 @@
 package com.callhandling.media.io
 
-trait IOError
+import com.callhandling.Validation
 
-case object MediaNotFound extends IOError
+trait IOValidation extends Validation
+
+case object MediaNotFound extends IOValidation {
+  override def errorMessage = "Media not found"
+}

@@ -8,7 +8,7 @@ import akka.stream.IOResult
 import akka.stream.scaladsl.FileIO
 import com.callhandling.media.converters.Formats
 import com.callhandling.media.converters.Formats.Format
-import com.callhandling.media.io.{BytesInlet, BytesOutlet, IOError, InletOr, MediaNotFound}
+import com.callhandling.media.io.{BytesInlet, BytesOutlet, IOValidation, InletOr, MediaNotFound}
 import com.callhandling.media.{MediaID, MediaStream, OutputFormat}
 import com.callhandling.util.FileUtil._
 
@@ -20,7 +20,7 @@ class FileStreamIO(storagePath: String) {
   def read(id: MediaID, format: OutputFormat): InletOr[IOResult] = {
     val path = formatPath(id, Some(format))
 
-    if (new File(pathString(path)).isFile) pathToSource(path).asRight[IOError]
+    if (new File(pathString(path)).isFile) pathToSource(path).asRight[IOValidation]
     else MediaNotFound.asLeft[FileByteSource]
   }
 

@@ -7,7 +7,7 @@ import com.callhandling.media.MediaStream._
 import com.callhandling.media.converters.Formats.Format
 import com.callhandling.media.converters.{OnGoing, OutputArgs}
 import com.callhandling.media.{MediaStream, Rational}
-import com.callhandling.web.Forms.{ConvertFileForm, FileIdForm, FormatForm, OptionalFormatForm, UploadFileForm}
+import com.callhandling.web.Form.{ConvertFileForm, FileIdForm, FormatForm, OptionalFormatForm, UploadFileForm}
 import com.callhandling.web.validators.Validator.FieldErrorInfo
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 

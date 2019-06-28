@@ -16,7 +16,7 @@ package object io {
   type BytesOutlet[M] = MediaIO[Sink, M]
 
   // Base type for IO results with error handling capability
-  type IOOr[A] = Either[IOError, A]
+  type IOOr[A] = Either[IOValidation, A]
 
   // Specific types of IO results that may fail
   type InletOr[M] = IOOr[BytesInlet[M]]
