@@ -2,8 +2,7 @@ package com.callhandling.web.validators
 
 import cats.data.ValidatedNec
 import cats.implicits._
-import com.callhandling.web.Form.{ConversionStatusForm, ConvertFileForm, FileIdForm, FormatForm, PlayForm, UploadFileForm}
-import com.callhandling.web.validators.RequestValidation.{BelowMinimumLength, EmptyField}
+import com.callhandling.web.Form._
 
 trait FormValidator {
   type ValidationResult[A] = ValidatedNec[RequestValidation, A]
