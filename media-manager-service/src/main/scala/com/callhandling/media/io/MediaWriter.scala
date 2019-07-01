@@ -2,11 +2,13 @@ package com.callhandling.media.io
 
 import com.callhandling.media.OutputFormat
 
-trait MediaWriter[O, M] {
-  def write(output: O, id: String, outputFormat: OutputFormat): OutletOr[M]
-  def write(output: O, id: String): OutletOr[M]
+trait MediaWriter[O] {
+  type Mat
+
+  def write(output: O, id: String, outputFormat: OutputFormat): OutletOr[Mat]
+  def write(output: O, id: String): OutletOr[Mat]
 }
 
 object MediaWriter {
-  def apply[W, M](implicit writer: MediaWriter[W, M]): MediaWriter[W, M] = writer
+  def apply[W](implicit writer: MediaWriter[W]): MediaWriter[W] = writer
 }

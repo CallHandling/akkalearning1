@@ -9,15 +9,15 @@ import com.callhandling.media.processor.AudioProcessor._
 import com.callhandling.media.processor.Worker.Convert
 
 object Worker {
-  def props[O, M](id: String, inlet: BytesInlet[M], output: O)
-      (implicit writer: MediaWriter[O, M], mat: ActorMaterializer): Props =
+  def props[O: MediaWriter, M](id: String, inlet: BytesInlet[M], output: O)
+      (implicit mat: ActorMaterializer): Props =
     Props(new Worker[O, M](id, inlet, output))
 
   final case class Convert(outputArgs: OutputArgs, timeDuration: Float)
 }
 
-class Worker[O, M](id: String, inlet: BytesInlet[M], output: O)
-    (implicit writer: MediaWriter[O, M], mat: ActorMaterializer) extends Actor with ActorLogging {
+class Worker[O: MediaWriter, M](id: String, inlet: BytesInlet[M], output: O)
+    (implicit mat: ActorMaterializer) extends Actor with ActorLogging {
   override def receive = {
     case Convert(outputArgs @ OutputArgs(format, _, _, _), timeDuration) =>
       log.info(s"Converting to $format...")
@@ -25,7 +25,7 @@ class Worker[O, M](id: String, inlet: BytesInlet[M], output: O)
       val inputStream = inlet.runWith(StreamConverters.asInputStream())
 
       val outputStreamOr = for {
-        outlet <- writer.write(output, id, format)
+        outlet <- MediaWriter[O].write(output, id, format)
       } yield {
         val outletStream = StreamConverters.asOutputStream()
         outletStream.toMat(outlet)(Keep.left).run()

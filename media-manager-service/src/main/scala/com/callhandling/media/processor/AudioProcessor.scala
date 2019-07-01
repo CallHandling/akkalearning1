@@ -12,8 +12,7 @@ import com.callhandling.media.{MediaStream, OutputFormat}
 object AudioProcessor {
   val RegionName = "AudioProcessor"
 
-  def props[I, O, M](input: I, output: O)
-      (implicit reader: MediaReader[I, M], writer: MediaWriter[O, M]): Props =
+  def props[I: MediaReader, O: MediaWriter](input: I, output: O): Props =
     Props(new AudioProcessor(input, output))
 
   sealed trait ConversionStatus
@@ -57,8 +56,7 @@ object AudioProcessor {
   final case class FormatProgress(format: OutputFormat, progress: Progress)
 }
 
-class AudioProcessor[I, O, M](input: I, output: O)
-    (implicit reader: MediaReader[I, M], writer: MediaWriter[O, M])
+class AudioProcessor[I: MediaReader, O: MediaWriter](input: I, output: O)
     extends FSM[State, Data] with ActorLogging {
   implicit val mat: ActorMaterializer = ActorMaterializer()
 
@@ -139,7 +137,7 @@ class AudioProcessor[I, O, M](input: I, output: O)
         case Convertible(id, _, conversionSet, timeDuration) => conversionSet.foreach {
           case Conversion(outputArgs, Converting) =>
             val workerOr = for {
-              inlet <- reader.read(input, id)
+              inlet <- MediaReader[I].read(input, id)
             } yield context.actorOf(Worker.props(id, inlet, output))
 
             workerOr.foreach(_ ! Convert(outputArgs, timeDuration))
@@ -149,7 +147,7 @@ class AudioProcessor[I, O, M](input: I, output: O)
   }
 
   def prepareConversion(id: String): Either[ConversionError, Float] = {
-    val mediaStreams = MediaReader[I, M].mediaStreams(input, id)
+    val mediaStreams = MediaReader[I].mediaStreams(input, id)
 
     for {
       // Get the media stream information.

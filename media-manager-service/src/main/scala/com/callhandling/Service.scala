@@ -38,17 +38,12 @@ object Service {
 
   final case class MediaFileDetail(description: String)
 
-  def apply[I, O, M](
+  def apply[I: MediaReader, O: MediaWriter](
       fileRegion: ActorRef,
       audioProcessorRegion: ActorRef,
       input: I,
       output: O)
-      (implicit
-          system: ActorSystem,
-          mat: ActorMaterializer,
-          timeout: Timeout,
-          reader: MediaReader[I, M],
-          writer: MediaWriter[O, M]) =
+      (implicit system: ActorSystem, mat: ActorMaterializer, timeout: Timeout) =
     new Service(fileRegion, audioProcessorRegion, input, output)
 
   implicit class ValidationRequestMarshaller[A](um: FromRequestUnmarshaller[A]) {
@@ -63,14 +58,9 @@ object Service {
   }
 }
 
-class Service[I, O, M](
+class Service[I: MediaReader, O: MediaWriter](
     fileRegion: ActorRef, audioProcessorRegion: ActorRef, input: I, output: O)
-    (implicit
-        system: ActorSystem,
-        mat: ActorMaterializer,
-        timeout: Timeout,
-        reader: MediaReader[I, M],
-        writer: MediaWriter[O, M]) {
+    (implicit system: ActorSystem, mat: ActorMaterializer, timeout: Timeout) {
   import FileActor._
   import Service._
   import com.callhandling.web.Form._
@@ -99,7 +89,7 @@ class Service[I, O, M](
                 fileRegion ! SendToEntity(fileId, UploadStarted)
 
                 val uploadFutureOr = for {
-                  outlet <- writer.write(output, fileId)
+                  outlet <- MediaWriter[O].write(output, fileId)
                 } yield byteSource.toMat(outlet)(Keep.right).run
 
                 uploadFutureOr match {
@@ -110,8 +100,8 @@ class Service[I, O, M](
                     val fileDataF = fileRegion ? SendToEntity(fileId, GetDetails)
                     onSuccess(fileDataF) {
                       case Details(_, _, description) =>
-                        val streams = reader.mediaStreams(input, fileId)
-                        val outputFormats = reader.outputFormats(input, fileId)
+                        val streams = MediaReader[I].mediaStreams(input, fileId)
+                        val outputFormats = MediaReader[I].outputFormats(input, fileId)
                         complete(UploadResult(fileId, filename, description, streams, outputFormats))
                       case _ => complete(internalError("Could not retrieve file data."))
                     }
@@ -134,7 +124,7 @@ class Service[I, O, M](
           case ConvertFileForm(fileId, format, channels, sampleRate, codec) =>
             val outputArgs = OutputArgs(format, channels, sampleRate, codec)
 
-            val validFormat = reader.outputFormats(input, fileId).exists(_.code == format)
+            val validFormat = MediaReader[I].outputFormats(input, fileId).exists(_.code == format)
             if (validFormat) {
               fileRegion ! SendToEntity(
                 fileId, RequestForConversion(Vector(outputArgs)))
@@ -165,8 +155,8 @@ class Service[I, O, M](
       get {
         entity(as[OptionalFormatForm].validate) { case OptionalFormatForm(formatOpt) =>
           val inletOpt = formatOpt
-            .map(reader.read(input, fileId, _))
-            .orElse(Some(reader.read(input, fileId)))
+            .map(MediaReader[I].read(input, fileId, _))
+            .orElse(Some(MediaReader[I].read(input, fileId)))
 
           val successOr = for {
             inlet <- EitherT(inletOpt)
