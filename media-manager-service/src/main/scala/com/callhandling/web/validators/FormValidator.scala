@@ -9,7 +9,8 @@ trait FormValidator {
   type ValidationResult[A] = ValidatedNec[RequestValidation, A]
   type FormValidation[F] = F => ValidationResult[F]
 
-  def validateForm[F, A](form: F)(f: ValidationResult[F] => A)(implicit formValidation: FormValidation[F]): A =
+  def validateForm[F, A](form: F)(f: ValidationResult[F] => A)
+      (implicit formValidation: FormValidation[F]): A =
     f(formValidation(form))
 
   private def requiredId[F: Required](fileId: F) = validateRequired(fileId, "fileId")
@@ -40,15 +41,11 @@ trait FormValidator {
 
   implicit lazy val optionalFormatValidation: FormValidation[OptionalFormatForm] = {
     case form @ OptionalFormatForm(None) => Valid(form)
+
+    // validate format normally if exists
     case OptionalFormatForm(Some(format)) => validateForm(FormatForm(format)) {
       case Valid(FormatForm(_)) => Valid(OptionalFormatForm(Some(format)))
       case invalid @ Invalid(_) => invalid
     }
-  }
-
-  // TODO: Format is not required, but if provided, check it's validity
-  //  (e.g. minimum length, converted media exists, etc.).
-  implicit lazy val playFormValidation: FormValidation[PlayForm] = { case PlayForm(fileId, format) =>
-    requiredId(fileId).map(PlayForm(_, format))
   }
 }
