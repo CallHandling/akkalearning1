@@ -1,5 +1,6 @@
 package com.callhandling.web.validators
 
+import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNec
 import cats.implicits._
 import com.callhandling.web.Form._
@@ -11,9 +12,9 @@ trait FormValidator {
   def validateForm[F, A](form: F)(f: ValidationResult[F] => A)(implicit formValidation: FormValidation[F]): A =
     f(formValidation(form))
 
-  def requiredId[F: Required](fileId: F) = validateRequired(fileId, "fileId")
+  private def requiredId[F: Required](fileId: F) = validateRequired(fileId, "fileId")
 
-  def requiredFormat[F: Required](format: F) = validateRequired(format, "format")
+  private def requiredFormat[F: Required](format: F) = validateRequired(format, "format")
 
   implicit lazy val uploadFileFormValidation: FormValidation[UploadFileForm] = {
     case UploadFileForm(description) =>
@@ -23,7 +24,7 @@ trait FormValidator {
   implicit lazy val convertFileFormValidation: FormValidation[ConvertFileForm] = {
     case ConvertFileForm(fileId, format, channels, sampleRate, codec) => (
       requiredId(fileId),
-      validateRequired(format, "format"),
+      requiredFormat(format),
       validateRequired(channels, "channels"),
       validateRequired(sampleRate, "sampleRate"),
       validateRequired(codec, "codec")).mapN(ConvertFileForm)
@@ -35,6 +36,14 @@ trait FormValidator {
 
   implicit lazy val formatFormValidation: FormValidation[FormatForm] = { case FormatForm(format) =>
     requiredFormat(format).map(FormatForm)
+  }
+
+  implicit lazy val optionalFormatValidation: FormValidation[OptionalFormatForm] = {
+    case form @ OptionalFormatForm(None) => Valid(form)
+    case OptionalFormatForm(Some(format)) => validateForm(FormatForm(format)) {
+      case Valid(FormatForm(_)) => Valid(OptionalFormatForm(Some(format)))
+      case invalid @ Invalid(_) => invalid
+    }
   }
 
   // TODO: Format is not required, but if provided, check it's validity

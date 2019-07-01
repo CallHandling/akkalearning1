@@ -163,7 +163,7 @@ class Service[I, O, M](
   def playV1 = pathPrefix("play") {
     path(Remaining) { fileId =>
       get {
-        entity(as[OptionalFormatForm]) { case OptionalFormatForm(formatOpt) =>
+        entity(as[OptionalFormatForm].validate) { case OptionalFormatForm(formatOpt) =>
           val inletOpt = formatOpt
             .map(reader.read(input, fileId, _))
             .orElse(Some(reader.read(input, fileId)))
