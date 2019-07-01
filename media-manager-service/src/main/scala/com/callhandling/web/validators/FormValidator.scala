@@ -13,22 +13,22 @@ trait FormValidator {
       (implicit formValidation: FormValidation[F]): A =
     f(formValidation(form))
 
-  private def requiredId[F: Required](fileId: F) = validateRequired(fileId, "fileId")
+  private def requiredId[F: Required](fileId: F) = validateRequired(fileId, "File")
 
-  private def requiredFormat[F: Required](format: F) = validateRequired(format, "format")
+  private def requiredFormat[F: Required](format: F) = validateRequired(format, "Format")
 
   implicit lazy val uploadFileFormValidation: FormValidation[UploadFileForm] = {
     case UploadFileForm(description) =>
-      validateMinimum(description, "description", 5).map(UploadFileForm)
+      validateMinimum(description, "Description", 5).map(UploadFileForm)
   }
 
   implicit lazy val convertFileFormValidation: FormValidation[ConvertFileForm] = {
     case ConvertFileForm(fileId, format, channels, sampleRate, codec) => (
       requiredId(fileId),
       requiredFormat(format),
-      validateRequired(channels, "channels"),
-      validateRequired(sampleRate, "sampleRate"),
-      validateRequired(codec, "codec")).mapN(ConvertFileForm)
+      validateRequired(channels, "Channels"),
+      validateRequired(sampleRate, "Sample Rate"),
+      validateRequired(codec, "Codec")).mapN(ConvertFileForm)
   }
 
   implicit lazy val fileIdFormValidation: FormValidation[FileIdForm] = { case FileIdForm(fileId) =>
@@ -40,9 +40,10 @@ trait FormValidator {
   }
 
   implicit lazy val optionalFormatValidation: FormValidation[OptionalFormatForm] = {
+    // non-existing format parameter should not be an issue
     case form @ OptionalFormatForm(None) => Valid(form)
 
-    // validate format normally if exists
+    // validate format normally if it exists
     case OptionalFormatForm(Some(format)) => validateForm(FormatForm(format)) {
       case Valid(FormatForm(_)) => Valid(OptionalFormatForm(Some(format)))
       case invalid @ Invalid(_) => invalid
