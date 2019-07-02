@@ -30,7 +30,4 @@ package object actors {
   val extractShardId: ShardRegion.ExtractShardId = {
     case SendToEntity(id, _) => (id.hashCode % NumberOfShards).toString
   }
-
-  type AudioProcessor[I, O, SM] = processor.AudioProcessor[I, O, SM]
-  type Worker[O, SM] = processor.Worker[O, SM]
 }
